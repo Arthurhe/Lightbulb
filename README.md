@@ -1,6 +1,6 @@
 # Lightbulb
 
-An single cell RNA-seq analysis pipeline/suite currently focusing on 10X and time series samples.
+A single cell RNA-seq analysis pipeline/suite currently focusing on 10X data and time series samples.
 
 Todos:
 
