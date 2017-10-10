@@ -17,7 +17,7 @@ df = feather.read_dataframe(args.matx)
 scdata = magic.mg.SCData(df, 'sc-seq')
 
 # MAGIC
-scdata.run_magic(n_pca_components=20, random_pca=True, t=6, k=30,ka=10, epsilon=1, rescale_percent=99)
+scdata.run_magic(n_pca_components=15, random_pca=True, t=6, k=30,ka=10, epsilon=1, rescale_percent=99)
 
 #output
 feather.write_dataframe(scdata.magic.data, args.out)
