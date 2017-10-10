@@ -1,4 +1,5 @@
-#prepare timepoint table #metadata #this is all input we need now
+#the lightTree lineage algorithm
+#in dev
 
 LightTree=function(TagMatrix, #the input matrix, per row cells, per column gene
                   libTimePoint, #timepoint for each sample
@@ -264,6 +265,9 @@ LightTree=function(TagMatrix, #the input matrix, per row cells, per column gene
                                  prec_time=prec_time,
                                  prec_state=prec_state,
                                  prec_center=prec_center)
+    
+    ##the core part finished
+    
     return(return_obj=list(timepoint_centers=timepoint_centers,
                            cellbelong=cellbelong,
                            cellbelongtable=cellbelongtable))
