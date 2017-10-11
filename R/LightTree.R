@@ -11,12 +11,13 @@ LightTree_Main=function(TagMatrix, #the input matrix, per row cells, per column 
                         libTimePoint, #timepoint for each sample
                         cellbelong, #which sample each cell belongs to
                         clearTime=NULL, #which timepoint is clearly depends on previous timepoint
-                        total_state_num=30, #total number of state used for plot lineage
+                        total_state_num=50, #total number of state used for plot lineage
+                        showing_state_num=25, #number of center showing in the plot
                         detectionlimit=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
                         coordinates=NULL,  #the coordinate for lineage finding
                         blockingTime=NULL,
                         loopNum=50,
-                        arrows_filter_limit=0.1
+                        arrows_filter_limit=0.25
 ){}
 
 
@@ -24,12 +25,13 @@ LightTree_PerCoordSet=function(TagMatrix, #the input matrix, per row cells, per 
                                libTimePoint, #timepoint for each sample
                                cellbelong, #which sample each cell belongs to
                                clearTime=NULL, #which timepoint is clearly depends on previous timepoint
-                               total_state_num=30, #total number of state used for plot lineage
+                               total_state_num=50, #total number of state used for calculate lineage
+                               showing_state_num=25, #number of center showing in the plot
                                detectionlimit=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
                                coordinates=NULL,  #the coordinate for lineage finding
                                blockingTime=NULL,
                                loopNum=50,
-                               arrows_filter_limit=0.1
+                               arrows_filter_limit=0.25
 ){
   #variable check and generation
   if(is.null(coordinates) & is.null(TagMatrix)){
@@ -64,40 +66,48 @@ LightTree_PerCoordSet=function(TagMatrix, #the input matrix, per row cells, per 
   end_cell_posi=coordinates[start_end_cell_df[,2],]
   
   #clustering the end point
-  startend_kmean=kmeans(rbind(start_cell_posi,end_cell_posi),centers=total_state_num, iter.max = 100,nstart = 10)
+  startend_kmean=kmeans(rbind(start_cell_posi,end_cell_posi),centers=showing_state_num, iter.max = 100,nstart = 10)
   start_states=startend_kmean$cluster[1:nrow(start_cell_posi)]
   end_states=rep(0,nrow(start_cell_posi))
   end_states[which(start_end_cell_df[,2]!=0)]=startend_kmean$cluster[(nrow(start_cell_posi)+1):length(startend_kmean$cluster)]
   #find cluster center (the cell)
   dist_tocenter=proxy::dist(startend_kmean$centers,coordinates)
-  centercell=sapply(1:total_state_num,function(x){which.min(dist_tocenter[x,])})
+  centercell=sapply(1:showing_state_num,function(x){which.min(dist_tocenter[x,])})
   centercell_pTSd=pseudo_timeSd[centercell]
   centercell_pTSd=log2(centercell_pTSd/max(centercell_pTSd)*10)
   
   #build tree table
   ave_tree=list()
-  for(i in 1:total_state_num){
+  for(i in 1:showing_state_num){
     last_states=table(end_states[which(start_states==i)])
+    #get rid of the ones point toward itself
+    last_states=last_states[as.numeric(names(last_states))!=i]
+    #get percentage
     last_states=last_states/sum(last_states)
-    #amplify the state that's unstatble
-    last_states_amp=last_states
-    last_states_amp[names(last_states) != "0"]=last_states[names(last_states) != "0"] * centercell_pTSd[as.numeric(names(last_states))]
-    last_states=last_states[last_states_amp>arrows_filter_limit]
     
-    if(0 %in% as.numeric(names(last_states))){
-      percent0=last_states["0"]
-      last_states=last_states[which(names(last_states)!="0")]
-      ave_tree[[i]]=data.frame(state=i,
-                               center=centercell[i],
-                               prec_state=c(0,as.numeric(names(last_states))),
-                               prec_center=c(0,centercell[as.numeric(names(last_states))]),
-                               arrow_strength=c(percent0,as.vector(last_states)))
+    #amplify the state that's unstatble
+    #last_states_amp=last_states
+    #last_states_amp[names(last_states) != "0"]=last_states[names(last_states) != "0"] * centercell_pTSd[as.numeric(names(last_states))]
+    last_states=last_states[last_states>arrows_filter_limit]
+    
+    if(length(last_states)==0){
+      warning("length = 0 shit!")
     }else{
-      ave_tree[[i]]=data.frame(state=i,
-                               center=centercell[i],
-                               prec_state=as.numeric(names(last_states)),
-                               prec_center=centercell[as.numeric(names(last_states))],
-                               arrow_strength=as.vector(last_states))
+      if(0 %in% as.numeric(names(last_states))){
+        percent0=last_states["0"]
+        last_states=last_states[which(names(last_states)!="0")]
+        ave_tree[[i]]=data.frame(state=i,
+                                 center=centercell[i],
+                                 prec_state=c(0,as.numeric(names(last_states))),
+                                 prec_center=c(0,centercell[as.numeric(names(last_states))]),
+                                 arrow_strength=c(percent0,as.vector(last_states)))
+      }else{
+        ave_tree[[i]]=data.frame(state=i,
+                                 center=centercell[i],
+                                 prec_state=as.numeric(names(last_states)),
+                                 prec_center=centercell[as.numeric(names(last_states))],
+                                 arrow_strength=as.vector(last_states))
+      }
     }
   }
   ave_tree_df=do.call(rbind,ave_tree)

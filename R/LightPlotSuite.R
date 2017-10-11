@@ -2,7 +2,7 @@
 #in dev
 
 devtools::use_package('ggplot2')
-
+#devtools::use_package('RColorBrewer')
 
 plotting_lineage_states=function(coord,timepoint_centers,cluster_label,lib_label){
   require(gridExtra)
@@ -48,6 +48,7 @@ plotting_lineage_states=function(coord,timepoint_centers,cluster_label,lib_label
 
 plotting_lineage_pseudoT=function(coord,ave_tree_df,pseudo_time,pseudo_timeSd,lib_label){
   require(gridExtra)
+  rbPal <- colorRampPalette(c('#2b83ba','#abdda4','#ffffbf','#fdae61','#d7191c'))
   #create the master dataframe
   data_tab=data.frame(x=coord[,1],y=coord[,2],
                       library=factor(lib_label,levels = unique(lib_label)),
@@ -70,13 +71,15 @@ plotting_lineage_pseudoT=function(coord,ave_tree_df,pseudo_time,pseudo_timeSd,li
     ggplot2::geom_point(size=1) + 
     ggplot2::geom_point(data=starting_cell,inherit.aes =F,aes(x, y),shape=4,colour="firebrick4",size=2.5,stroke = 3) +
     ggplot2::geom_segment(data=mapping_table,aes(x=start_x, xend=stop_x, y=start_y, yend=stop_y),size = ave_tree_df$arrow_strength,inherit.aes =F,arrow = arrow(length = unit(0.2, "cm"))) +
-    ggplot2::theme(legend.position="none")
+    ggplot2::theme(legend.position="none") +
+    scale_colour_gradientn(colours=rbPal(25))
   
   g3=ggplot2::ggplot(data_tab, aes(x, y,colour=pseudoSd)) + 
     ggplot2::geom_point(size=1) + 
     ggplot2::geom_point(data=starting_cell,inherit.aes =F,aes(x, y),shape=4,colour="firebrick4",size=2.5,stroke = 3) +
     ggplot2::geom_segment(data=mapping_table,aes(x=start_x, xend=stop_x, y=start_y, yend=stop_y),size = ave_tree_df$arrow_strength,inherit.aes =F,arrow = arrow(length = unit(0.2, "cm"))) +
-    ggplot2::theme(legend.position="none")
+    ggplot2::theme(legend.position="none") +
+    scale_colour_gradientn(colours=rbPal(25))
   
   g2=ggplot2::ggplot(data_tab, aes(x, y,colour=library)) + 
     ggplot2::geom_point(size=1) +
