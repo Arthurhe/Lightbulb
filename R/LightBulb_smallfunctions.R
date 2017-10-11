@@ -1,6 +1,8 @@
 #all the random small functions
 #in dev
 
+devtools::use_package('Matrix')
+
 SparseMatrix2Dataframe=function(mat,orderByRow=T){
     #get the data frame version of the sparse matrix object mat 
     summ=Matrix::summary(mat)
@@ -20,7 +22,6 @@ SparseMatrix2Matrix=function(mat,orderByRow=T){
     }
     return(matdataframe)
 }
-
 
 States_In_Timeline=function(timepoint_centers,starting_state,stoping_state=0){
     prec_state=timepoint_centers$prec_state[which(timepoint_centers$state==starting_state)]
