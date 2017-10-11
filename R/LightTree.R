@@ -14,43 +14,70 @@ LightTree_Main=function(TagMatrix, #the input matrix, per row cells, per column 
                         total_state_num=50, #total number of state used for plot lineage
                         showing_state_num=25, #number of center showing in the plot
                         detectionlimit=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
-                        coordinates=NULL,  #the coordinate for lineage finding
                         blockingTime=NULL,
-                        loopNum=50,
+                        cellnum_for_small_cycle=ceiling(nrow(TagMatrix)/10),
+                        small_cycle_num=50,
+                        loopNumPerSmallCycle=50,
                         arrows_filter_limit=0.25
-){}
+){
+  #variable check
+  if(cellnum_for_small_cycle>nrow(TagMatrix)){
+    stop("cellnum_for_small_cycle must be smaller than total cell num (i.e. nrow(TagMatrix))")
+  }
+  
+  LightTree_PerCoordSet_returns=list()
+  for(i in 1:small_cycle_num){
+    #sample cells and run TSNE 
+    tagCell=sample(nrow(TagMatrix),cellnum_for_small_cycle)
+    rtsne_result=Rtsne::Rtsne(TagMatrix[tagCell,],dims=3,max_iter = 500)
+    #the arrows for each maps are
+    current_ret=LightTree_PerCoordSet(libTimePoint=libTimePoint, #timepoint for each sample
+                                      cellbelong=cellbelong[tagCell], #which sample each cell belongs to
+                                      coordinates=rtsne_result$Y, #the coordinate for lineage finding
+                                      clearTime=clearTime, #which timepoint is clearly depends on previous timepoint
+                                      total_state_num=total_state_num, #total number of state used for calculate lineage
+                                      showing_state_num=showing_state_num, #number of center showing in the plot
+                                      detectionlimit=detectionlimit, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
+                                      blockingTime=blockingTime,
+                                      loopNumPerSmallCycle=loopNumPerSmallCycle,
+                                      arrows_filter_limit=arrows_filter_limit)
+    LightTree_PerCoordSet_returns[[i]]=current_ret$ave_tree_df[,c(2,4,5)]
+    #adjust the cell idx to real idx
+    LightTree_PerCoordSet_returns[[i]]$center=tagCell[LightTree_PerCoordSet_returns[[i]]$center]
+    LightTree_PerCoordSet_returns[[i]]$prec_center=tagCell[LightTree_PerCoordSet_returns[[i]]$prec_center]
+  }
+  #find the average tree
+  center_prec_venter_pairs=do.call(rbind,LightTree_PerCoordSet_returns)
+  
+  #perform full TSNE
+  rtsne_result=Rtsne::Rtsne(TagMatrix[tagCell,],dims=2,max_iter = 1500)
+
+  #the function
+  ave_tree_df=arrows_clustering(start_end_cell_df=center_prec_venter_pairs[,1:2],
+                                arrow_strength=center_prec_venter_pairs[,3],
+                                showing_state_num=showing_state_num,
+                                coordinates=rtsne_result$Y)  
+  return(list(coordinate=rtsne_result$Y,
+              ave_tree_df=ave_tree_df))
+}
 
 
-LightTree_PerCoordSet=function(TagMatrix, #the input matrix, per row cells, per column gene
-                               libTimePoint, #timepoint for each sample
+LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
                                cellbelong, #which sample each cell belongs to
+                               coordinates, #the coordinate for lineage finding
                                clearTime=NULL, #which timepoint is clearly depends on previous timepoint
                                total_state_num=50, #total number of state used for calculate lineage
                                showing_state_num=25, #number of center showing in the plot
                                detectionlimit=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
-                               coordinates=NULL,  #the coordinate for lineage finding
                                blockingTime=NULL,
-                               loopNum=50,
-                               arrows_filter_limit=0.25
-){
-  #variable check and generation
-  if(is.null(coordinates) & is.null(TagMatrix)){
-    stop("the converted the manifold coordinates (TSNE result) or the raw expression matrix must be provided")
-  }
-  
-  if(is.null(coordinates)){
-    #do TSNE / dimension reduction to filter noise
-    rtsne_result=Rtsne::Rtsne(TagMatrix,dims=3,max_iter = 2500)
-    rtsne_coordinate=rtsne_result$Y
-    #DDRTree_res=DDRTree(t(TagMatrix), dimensions = 2,ncenter=GapPick$K)
-    coordinates=rtsne_coordinate #t(DDRTree_res$Z)
-  }
-  
+                               loopNumPerSmallCycle=50,
+                               arrows_filter_limit=0.25)
+  {
   ##main chunk
   #loop loopNum times
-  pseudo_timetable=matrix(0,length(cellbelong),loopNum)
+  pseudo_timetable=matrix(0,length(cellbelong),loopNumPerSmallCycle)
   start_end_cells=list()
-  for(i in 1:loopNum){
+  for(i in 1:loopNumPerSmallCycle){
     temp_LightTree=LightTree_core(libTimePoint,cellbelong,clearTime,total_state_num,detectionlimit,coordinates,blockingTime)
     start_end_cells[[i]]=temp_LightTree$timepoint_center[,c(3,6)]
     pseudo_timetable[,i]=temp_LightTree$cellbelongtable$pseudo_t
@@ -59,58 +86,12 @@ LightTree_PerCoordSet=function(TagMatrix, #the input matrix, per row cells, per 
   pseudo_timeSd=matrixStats::rowSds(pseudo_timetable)
   
   #find the average tree
-  #start is now
-  #end is previous/last
   start_end_cell_df=do.call(rbind,start_end_cells)
-  start_cell_posi=coordinates[start_end_cell_df[,1],]
-  end_cell_posi=coordinates[start_end_cell_df[,2],]
-  
-  #clustering the end point
-  startend_kmean=kmeans(rbind(start_cell_posi,end_cell_posi),centers=showing_state_num, iter.max = 100,nstart = 10)
-  start_states=startend_kmean$cluster[1:nrow(start_cell_posi)]
-  end_states=rep(0,nrow(start_cell_posi))
-  end_states[which(start_end_cell_df[,2]!=0)]=startend_kmean$cluster[(nrow(start_cell_posi)+1):length(startend_kmean$cluster)]
-  #find cluster center (the cell)
-  dist_tocenter=proxy::dist(startend_kmean$centers,coordinates)
-  centercell=sapply(1:showing_state_num,function(x){which.min(dist_tocenter[x,])})
-  centercell_pTSd=pseudo_timeSd[centercell]
-  centercell_pTSd=log2(centercell_pTSd/max(centercell_pTSd)*10)
-  
-  #build tree table
-  ave_tree=list()
-  for(i in 1:showing_state_num){
-    last_states=table(end_states[which(start_states==i)])
-    #get rid of the ones point toward itself
-    last_states=last_states[as.numeric(names(last_states))!=i]
-    #get percentage
-    last_states=last_states/sum(last_states)
-    
-    #amplify the state that's unstatble
-    #last_states_amp=last_states
-    #last_states_amp[names(last_states) != "0"]=last_states[names(last_states) != "0"] * centercell_pTSd[as.numeric(names(last_states))]
-    last_states=last_states[last_states>arrows_filter_limit]
-    
-    if(length(last_states)==0){
-      warning("length = 0 shit!")
-    }else{
-      if(0 %in% as.numeric(names(last_states))){
-        percent0=last_states["0"]
-        last_states=last_states[which(names(last_states)!="0")]
-        ave_tree[[i]]=data.frame(state=i,
-                                 center=centercell[i],
-                                 prec_state=c(0,as.numeric(names(last_states))),
-                                 prec_center=c(0,centercell[as.numeric(names(last_states))]),
-                                 arrow_strength=c(percent0,as.vector(last_states)))
-      }else{
-        ave_tree[[i]]=data.frame(state=i,
-                                 center=centercell[i],
-                                 prec_state=as.numeric(names(last_states)),
-                                 prec_center=centercell[as.numeric(names(last_states))],
-                                 arrow_strength=as.vector(last_states))
-      }
-    }
-  }
-  ave_tree_df=do.call(rbind,ave_tree)
+  #the function
+  ave_tree_df=arrows_clustering(start_end_cell_df=start_end_cell_df,
+                                arrow_strength=NULL,
+                                showing_state_num=showing_state_num,
+                                coordinates=coordinates)
   
   return(return_obj=list(pseudo_time=pseudo_time,
                          pseudo_timeSd=pseudo_timeSd,
@@ -120,18 +101,14 @@ LightTree_PerCoordSet=function(TagMatrix, #the input matrix, per row cells, per 
 
 LightTree_core=function(libTimePoint, #timepoint for each sample
                    cellbelong, #which sample each cell belongs to
+                   coordinates, #the coordinate for lineage finding
                    clearTime=NULL, #which timepoint is clearly depends on previous timepoint
                    total_state_num=30, #total number of state used for plot lineage
                    detectionlimit=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
-                   coordinates=NULL,  #the coordinate for lineage finding
                    blockingTime=NULL
-){
+                   )
+  {
   #PART I
-  #variable check
-  if(is.null(coordinates)){
-    stop("the converted the manifold coordinates (TSNE result) must be provided")
-  }
-  
   #generating some variable
   #generate cellbelongtable from libTimePoint and cellbelong
   cellbelongtable=data.frame(
