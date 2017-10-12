@@ -8,8 +8,9 @@ devtools::use_package('matrixStats')
 
 #main
 LightTree_Main=function(TagMatrix, #the input matrix, per row cells, per column gene
-                        libTimePoint, #timepoint for each sample
-                        cellbelong, #which sample each cell belongs to
+                        batchidx, #library id
+                        timeorder, #timepoint for each library
+                        batch, #which library each cell belongs to
                         clearTime=NULL, #which timepoint is clearly depends on previous timepoint
                         total_state_num=50, #total number of state used for plot lineage
                         showing_state_num=25, #number of center showing in the plot
@@ -20,16 +21,26 @@ LightTree_Main=function(TagMatrix, #the input matrix, per row cells, per column 
                         loopNumPerSmallCycle=50,
                         arrows_filter_limit=0.25
 ){
+  ptm <- proc.time()
   #variable check
   if(cellnum_for_small_cycle>nrow(TagMatrix)){
     stop("cellnum_for_small_cycle must be smaller than total cell num (i.e. nrow(TagMatrix))")
   }
   
+  #generating
+  libTimePoint=data.frame(lib=batchidx,timeorder=timeorder)
+  cellbelong=batchidx[batch]
+
   LightTree_PerCoordSet_returns=list()
+  message (paste("LightTree scheduled to run",small_cycle_num,"cycles"))
   for(i in 1:small_cycle_num){
-    #sample cells and run TSNE 
-    tagCell=sample(nrow(TagMatrix),cellnum_for_small_cycle)
-    rtsne_result=Rtsne::Rtsne(TagMatrix[tagCell,],dims=3,max_iter = 500)
+    #sample cells and run TSNE
+    tagCell=c()
+    for(j in 1:max(batch)){
+      tagCell=c(tagCell,sample(which(batch==j),ceiling(cellnum_for_small_cycle/max(batch))))
+    }
+    tagCell=sort(sample(tagCell,cellnum_for_small_cycle))
+    rtsne_result=Rtsne::Rtsne(TagMatrix[tagCell,],dims=2,max_iter = 500)
     #the arrows for each maps are
     current_ret=LightTree_PerCoordSet(libTimePoint=libTimePoint, #timepoint for each sample
                                       cellbelong=cellbelong[tagCell], #which sample each cell belongs to
@@ -44,19 +55,23 @@ LightTree_Main=function(TagMatrix, #the input matrix, per row cells, per column 
     LightTree_PerCoordSet_returns[[i]]=current_ret$ave_tree_df[,c(2,4,5)]
     #adjust the cell idx to real idx
     LightTree_PerCoordSet_returns[[i]]$center=tagCell[LightTree_PerCoordSet_returns[[i]]$center]
-    LightTree_PerCoordSet_returns[[i]]$prec_center=tagCell[LightTree_PerCoordSet_returns[[i]]$prec_center]
+    LightTree_PerCoordSet_returns[[i]]$prec_center[LightTree_PerCoordSet_returns[[i]]$prec_center!=0]=tagCell[LightTree_PerCoordSet_returns[[i]]$prec_center]
+    message (paste("cycle",i,"finished"))
   }
   #find the average tree
   center_prec_venter_pairs=do.call(rbind,LightTree_PerCoordSet_returns)
-  
+  message ("final TSNE")
   #perform full TSNE
   rtsne_result=Rtsne::Rtsne(TagMatrix[tagCell,],dims=2,max_iter = 1500)
-
+  
   #the function
   ave_tree_df=arrows_clustering(start_end_cell_df=center_prec_venter_pairs[,1:2],
                                 arrow_strength=center_prec_venter_pairs[,3],
                                 showing_state_num=showing_state_num,
-                                coordinates=rtsne_result$Y)  
+                                coordinates=rtsne_result$Y,
+                                arrows_filter_limit=arrows_filter_limit)
+  message ("done")
+  message (paste("time consumed:",(proc.time() - ptm)[2]))
   return(list(coordinate=rtsne_result$Y,
               ave_tree_df=ave_tree_df))
 }
@@ -78,7 +93,13 @@ LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
   pseudo_timetable=matrix(0,length(cellbelong),loopNumPerSmallCycle)
   start_end_cells=list()
   for(i in 1:loopNumPerSmallCycle){
-    temp_LightTree=LightTree_core(libTimePoint,cellbelong,clearTime,total_state_num,detectionlimit,coordinates,blockingTime)
+    temp_LightTree=LightTree_core(libTimePoint=libTimePoint,
+                                  cellbelong=cellbelong,
+                                  clearTime=clearTime,
+                                  total_state_num=total_state_num,
+                                  detectionlimit=detectionlimit,
+                                  coordinates=coordinates,
+                                  blockingTime=blockingTime)
     start_end_cells[[i]]=temp_LightTree$timepoint_center[,c(3,6)]
     pseudo_timetable[,i]=temp_LightTree$cellbelongtable$pseudo_t
   }
@@ -91,7 +112,8 @@ LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
   ave_tree_df=arrows_clustering(start_end_cell_df=start_end_cell_df,
                                 arrow_strength=NULL,
                                 showing_state_num=showing_state_num,
-                                coordinates=coordinates)
+                                coordinates=coordinates,
+                                arrows_filter_limit=arrows_filter_limit)
   
   return(return_obj=list(pseudo_time=pseudo_time,
                          pseudo_timeSd=pseudo_timeSd,
@@ -142,17 +164,8 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
   #cluster distance
   cluster_dis=as.matrix(dist(kmean_result$centers))
   diag(cluster_dis)=Inf
-  #cluster_dis[is.na(cluster_dis)]=Inf
   
-  #state center cell
-  state_center=rep(0,properK)
-  for(i in 1:properK){
-    thecenter=kmean_result$centers
-    tagcell=which(kmean_result$cluster==i)
-    cell_center_distance=apply(coordinates[tagcell,],1,function(x){sqrt(sum((x-thecenter)^2))})
-    state_center[i]=tagcell[which.min(cell_center_distance)]
-  }
-  
+
   #find timepoint_center in each state
   #state time center
   state_time_center=matrix(0,properK,timepoint_num)

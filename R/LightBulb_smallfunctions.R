@@ -38,7 +38,8 @@ States_In_Timeline=function(timepoint_centers,starting_state,stoping_state=0){
 arrows_clustering=function(start_end_cell_df,
                            arrow_strength=NULL,
                            showing_state_num,
-                           coordinates)
+                           coordinates,
+                           arrows_filter_limit=0.1)
 {
   #start is now
   #end is previous/last
