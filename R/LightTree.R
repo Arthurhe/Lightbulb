@@ -59,21 +59,22 @@ LightTree_Main=function(TagMatrix, #the input matrix, per row cells, per column 
     message (paste("cycle",i,"finished"))
   }
   #find the average tree
-  center_prec_venter_pairs=do.call(rbind,LightTree_PerCoordSet_returns)
+  center_prec_center_pairs=do.call(rbind,LightTree_PerCoordSet_returns)
   message ("final TSNE")
   #perform full TSNE
-  rtsne_result=Rtsne::Rtsne(TagMatrix[tagCell,],dims=2,max_iter = 1500)
+  rtsne_result=Rtsne::Rtsne(TagMatrix,dims=2,max_iter = 1500)
   
   #the function
-  ave_tree_df=arrows_clustering(start_end_cell_df=center_prec_venter_pairs[,1:2],
-                                arrow_strength=center_prec_venter_pairs[,3],
+  ave_tree_df=arrows_clustering(start_end_cell_df=center_prec_center_pairs[,1:2],
+                                arrow_strength=center_prec_center_pairs[,3],
                                 showing_state_num=showing_state_num,
                                 coordinates=rtsne_result$Y,
                                 arrows_filter_limit=arrows_filter_limit)
   message ("done")
-  message (paste("time consumed:",(proc.time() - ptm)[2]))
+  message (paste("time consumed:",round((proc.time() - ptm)[3],3)))
   return(list(coordinate=rtsne_result$Y,
-              ave_tree_df=ave_tree_df))
+              ave_tree_df=ave_tree_df,
+              center_prec_center_pairs=center_prec_center_pairs))
 }
 
 
