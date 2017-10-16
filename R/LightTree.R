@@ -71,7 +71,8 @@ LightTree_Main=function(TagMatrix, #the input matrix, per row cells, per column 
                                 coordinates=rtsne_result$Y,
                                 arrows_filter_limit=arrows_filter_limit)
   message ("done")
-  message (paste("time consumed:",round((proc.time() - ptm)[3],3)))
+  t=second_to_humanReadableTime(round((proc.time() - ptm)[3],2))
+  message (paste("time consumed:",t[1],"hr",t[2],"min",t[3],"s"))
   return(list(coordinate=rtsne_result$Y,
               ave_tree_df=ave_tree_df,
               center_prec_center_pairs=center_prec_center_pairs))

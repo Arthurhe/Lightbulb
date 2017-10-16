@@ -65,7 +65,7 @@ arrows_clustering=function(start_end_cell_df,
       tag_arrow=which(start_states==i)
       possible_prec_state=unique(end_states[tag_arrow])
       last_states=sapply(possible_prec_state,function(x){
-        return(sum(arrow_strength[tag_arrow[end_states[tag_arrow]==i]]))
+        return(sum(arrow_strength[tag_arrow[end_states[tag_arrow]==x]]))
       })
       names(last_states)=possible_prec_state
     }
@@ -98,4 +98,66 @@ arrows_clustering=function(start_end_cell_df,
   }
   ave_tree_df=do.call(rbind,ave_tree)
   return(ave_tree_df)
+}
+
+second_to_humanReadableTime=function(t){
+  #change second to a vector of hour,min,second
+  h=floor(t/3600)
+  t=t-h*3600
+  m=floor(t/60)
+  t=t-m*60
+  s=t
+  t=c(h,m,s)
+  return(t)
+}
+
+
+
+#########################################################
+# This program is part of the SNN-Cliq method           #
+# Contact Chen Xu at UNC-Charlotte for more information.# 
+#########################################################
+#----- example of use------#
+#data<-read.table(infile, header=TRUE, sep="\t", row.names=1);
+#data<-log2(data+1)
+#source('SNN.R')
+#SNN(data, edge_file, k=3, distance='euclidean')
+#--------------------------#
+
+
+SNN<-function(coordinate, k=3, distance="euclidean"){
+  # other distance options refer to dist() in R
+  # data is a data.frame with row represent samples
+  numSpl<-nrow(coordinate)
+  x<-dist(coordinate, distance, diag=TRUE, upper=TRUE)
+  x<-as.matrix(x)
+  IDX<-t(apply(x,1,order)[1:k,]) # knn list
+  
+  edges<-list()              # SNN graph
+  for (i in 1:numSpl){
+    j<-i
+    while (j<numSpl){
+      j<-j+1
+      shared<-intersect(IDX[i,], IDX[j,])
+      if(length(shared)>0){			
+        s<-k-0.5*(match(shared, IDX[i,])+match(shared, IDX[j,]))
+        strength<-max(s)
+        if (strength>0)
+          edges<-rbind(edges, c(i,j,strength))
+      }				
+    }
+  }
+  write.table(edges, "SNN_edges_temp", quote=FALSE, sep='\t',col.names=FALSE,row.names=FALSE)
+  system(paste0("/home/ahe/SNN_cliq.py -i SNN_edges_temp -o SNN_out_temp"))
+  gps=data.table::fread("SNN_out_temp",header=F,data.table=F)
+  gps=gps[,1]
+  return(list(gps=gps,edges=edges))
+}
+    
+DEG_wilcox=function(group1,group2){
+  p=sapply(seq(ncol(group1)),function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
+  foldchange=sapply(seq(ncol(group1)),function(x){log2(mean(group1[,x]))-log2(mean(group2[,x]))})
+  o=cbind(p,foldchange)
+  colnames(o)=c("pval","foldchange")
+  return(p)
 }
