@@ -171,14 +171,14 @@ DEG_wilcox_UMI=function(group1,group2){
   return(o)
 }
 
-DEG_wilcox_norm=function(group1,group2,p_threshold=NULL,z_threshold=NULL,p_adjust_method="bonferroni"){
+DEG_wilcox_norm=function(group1,group2,p_threshold=NULL,z_threshold=NULL,p_adjust_method='bonferroni'){
   #p is fdr/BH corrected
   if(sum(colnames(group1)!=colnames(group2))>0){
     warning("gene names are different between group1 and group2")
   }
   p=rep(1,ncol(group1))
   delta_z=rep(1,ncol(group1))
-  tag=which((colSums(group1)+colSums(group2))>0)
+  tag=which(colSums(group1)!=colSums(group2))
   p[tag]=sapply(tag,function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
   p=p.adjust(p,method=p_adjust_method)
   delta_z[tag]=sapply(tag,function(x){mean(group1[,x])-mean(group2[,x])})
@@ -190,7 +190,6 @@ DEG_wilcox_norm=function(group1,group2,p_threshold=NULL,z_threshold=NULL,p_adjus
     o=data.frame(log10pval=log10(p),delta_z=delta_z)
   }
   rownames(o)=colnames(group1)
-
   return(o)
 }
 
