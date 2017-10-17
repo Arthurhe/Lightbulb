@@ -144,7 +144,7 @@ SNN<-function(coordinate, k=3, distance="euclidean"){
         strength<-max(s)
         if (strength>0)
           edges<-rbind(edges, c(i,j,strength))
-      }				
+      }	
     }
   }
   write.table(edges, "SNN_edges_temp", quote=FALSE, sep='\t',col.names=FALSE,row.names=FALSE)
@@ -154,10 +154,65 @@ SNN<-function(coordinate, k=3, distance="euclidean"){
   return(list(gps=gps,edges=edges))
 }
     
-DEG_wilcox=function(group1,group2){
-  p=sapply(seq(ncol(group1)),function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
-  foldchange=sapply(seq(ncol(group1)),function(x){log2(mean(group1[,x]))-log2(mean(group2[,x]))})
-  o=cbind(p,foldchange)
+DEG_wilcox_UMI=function(group1,group2){
+  p=rep(1,ncol(group1))
+  foldchange=rep(1,ncol(group1))
+  g1_pos=colSums(group1)>0
+  g2_pos=colSums(group2)>0
+  tag=which(g1_pos & g2_pos)
+  p[tag]=sapply(tag,function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
+  #for fold change 0 sum not allowed
+  tag=which(g1_pos | g2_pos)
+  foldchange[tag]=sapply(tag,function(x){log2(mean(group1[,x]))-log2(mean(group2[,x]))})
+  foldchange[which(g1_pos>g2_pos)]=Inf
+  foldchange[which(g1_pos<g2_pos)]=-Inf
+  o=cbind(log10(p),log2(foldchange))
   colnames(o)=c("pval","foldchange")
-  return(p)
+  return(o)
+}
+
+DEG_wilcox_norm=function(group1,group2,p_threshold=NULL,z_threshold=NULL,p_adjust_method="bonferroni"){
+  #p is fdr/BH corrected
+  if(sum(colnames(group1)!=colnames(group2))>0){
+    warning("gene names are different between group1 and group2")
+  }
+  p=rep(1,ncol(group1))
+  delta_z=rep(1,ncol(group1))
+  tag=which((colSums(group1)+colSums(group2))>0)
+  p[tag]=sapply(tag,function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
+  p=p.adjust(p,method=p_adjust_method)
+  delta_z[tag]=sapply(tag,function(x){mean(group1[,x])-mean(group2[,x])})
+  #check threshold
+  if(!is.null(p_threshold) & !is.null(z_threshold)){
+    tag=p<p_threshold & abs(delta_z) > abs(z_threshold)
+    o=data.frame(log10pval=log10(p),delta_z=delta_z,DE=tag)
+  }else{
+    o=data.frame(log10pval=log10(p),delta_z=delta_z)
+  }
+  rownames(o)=colnames(group1)
+
+  return(o)
+}
+
+group_reassigning=function(current_gps,target_gps){
+  tbl_gps=table(current_gps,target_gps)
+  tbl_gps_percentage=t(apply(tbl_gps,1,function(x){round(x/sum(x)*100)}))
+  new_gp_description=apply(tbl_gps_percentage,1,function(x){
+    tagnum=sum(x>30)
+    if(tagnum>1){
+      tag=order(x,decreasing = T)[1:tagnum]
+      newname=paste0(colnames(tbl_gps)[tag],"(",x[tag],"%)",collapse="_")
+    }else if(tagnum==1){
+      tag=order(x,decreasing = T)[1]
+      newname=paste0(colnames(tbl_gps)[tag],"(",x[tag],"%)")
+    }else{
+      tag=order(x,decreasing = T)[1]
+      newname=paste0(colnames(tbl_gps)[tag],"(",x[tag],"%)_mix")
+    }
+    return(newname)
+  })
+  new_gp_assignment=apply(tbl_gps_percentage,1,function(x){
+    colnames(tbl_gps)[which.max(x)]
+  })
+  return(obj=list(gp_assignment=new_gp_assignment,gp_description=new_gp_description,gp_table=tbl_gps))
 }
