@@ -9,6 +9,7 @@ Todos:
 |LightReader_10X    | read and filter 10X data   |	cellrangerRkit, data.table |	R |	Mostly finished |
 |LightCleaner       |	remove outlier and cap expression |	|	R |	Mostly finished, gave to Brian |
 |LightNorm          |   normalization              |    | R     | Mostly finished, gave to Brian |
+|LightDE            |   DE with wilcox, TPM adn z | | R | done |
 |LightMagic         |	R wrapper for magic, tailored for lightbulb needs. Remove dropout and finetune expression value |	Magic |	python |	finished |
 |TSNE               |	dimension reduction        |	Rtsne |	R |	existing package | need to test other algo
 |LightTree          |	create lineage tree        |	|	R |	Partial finished, need to narrow the branch and refine cluster connection |
