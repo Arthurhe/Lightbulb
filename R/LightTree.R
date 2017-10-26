@@ -1,19 +1,21 @@
 #the lightTree lineage algorithm
 #cellbelong is merged to cellbelongtable
 #in dev
-
+devtools::use_package('data.table')
 devtools::use_package('Rtsne')
 devtools::use_package('proxy')
 devtools::use_package('matrixStats')
+devtools::use_package('fastcluster')
+devtools::use_package('optrees')
+devtools::use_package('vegan')
+devtools::use_package('Matrix')
 
 #main
-LightTree_Main=function(TagMatrix, #the input matrix, per row cells, per column gene
+LightTree_Main=function(coordinates, #the coordinate for lineage finding
                         batchidx, #library id
                         timeorder, #timepoint for each library
                         batch, #which library each cell belongs to
-                        clearTime=NULL, #which timepoint is clearly depends on previous timepoint
-                        total_state_num=50, #total number of state used for plot lineage
-                        showing_state_num=25, #number of center showing in the plot
+                        total_state_num=50, #total number of state used for calculate pesudotime
                         detectionlimit=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
                         blockingTime=NULL,
                         cellnum_for_small_cycle=ceiling(nrow(TagMatrix)/10),
@@ -21,89 +23,62 @@ LightTree_Main=function(TagMatrix, #the input matrix, per row cells, per column 
                         loopNumPerSmallCycle=50,
                         arrows_filter_limit=0.25
 ){
-  ptm <- proc.time()
-  #variable check
-  if(cellnum_for_small_cycle>nrow(TagMatrix)){
-    stop("cellnum_for_small_cycle must be smaller than total cell num (i.e. nrow(TagMatrix))")
-  }
-  
-  #generating
-  libTimePoint=data.frame(lib=batchidx,timeorder=timeorder)
-  cellbelong=batchidx[batch]
-
-  LightTree_PerCoordSet_returns=list()
-  message (paste("LightTree scheduled to run",small_cycle_num,"cycles"))
-  for(i in 1:small_cycle_num){
-    #sample cells and run TSNE
-    tagCell=c()
-    for(j in 1:max(batch)){
-      tagCell=c(tagCell,sample(which(batch==j),ceiling(cellnum_for_small_cycle/max(batch))))
-    }
-    tagCell=sort(sample(tagCell,cellnum_for_small_cycle))
-    rtsne_result=Rtsne::Rtsne(TagMatrix[tagCell,],dims=2,max_iter = 500)
-    #the arrows for each maps are
-    current_ret=LightTree_PerCoordSet(libTimePoint=libTimePoint, #timepoint for each sample
-                                      cellbelong=cellbelong[tagCell], #which sample each cell belongs to
-                                      coordinates=rtsne_result$Y, #the coordinate for lineage finding
-                                      clearTime=clearTime, #which timepoint is clearly depends on previous timepoint
-                                      total_state_num=total_state_num, #total number of state used for calculate lineage
-                                      showing_state_num=showing_state_num, #number of center showing in the plot
-                                      detectionlimit=detectionlimit, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
-                                      blockingTime=blockingTime,
-                                      loopNumPerSmallCycle=loopNumPerSmallCycle,
-                                      arrows_filter_limit=arrows_filter_limit)
-    LightTree_PerCoordSet_returns[[i]]=current_ret$ave_tree_df[,c(2,4,5)]
-    #adjust the cell idx to real idx
-    LightTree_PerCoordSet_returns[[i]]$center=tagCell[LightTree_PerCoordSet_returns[[i]]$center]
-    LightTree_PerCoordSet_returns[[i]]$prec_center[LightTree_PerCoordSet_returns[[i]]$prec_center!=0]=tagCell[LightTree_PerCoordSet_returns[[i]]$prec_center]
-    message (paste("cycle",i,"finished"))
-  }
-  #find the average tree
-  center_prec_center_pairs=do.call(rbind,LightTree_PerCoordSet_returns)
-  message ("final TSNE")
-  #perform full TSNE
-  rtsne_result=Rtsne::Rtsne(TagMatrix,dims=2,max_iter = 1500)
-  
-  #the function
-  ave_tree_df=arrows_clustering(start_end_cell_df=center_prec_center_pairs[,1:2],
-                                arrow_strength=center_prec_center_pairs[,3],
-                                showing_state_num=showing_state_num,
-                                coordinates=rtsne_result$Y,
-                                arrows_filter_limit=arrows_filter_limit)
-  message ("done")
-  t=second_to_humanReadableTime(round((proc.time() - ptm)[3],2))
-  message (paste("time consumed:",t[1],"hr",t[2],"min",t[3],"s"))
-  return(list(coordinate=rtsne_result$Y,
-              ave_tree_df=ave_tree_df,
-              center_prec_center_pairs=center_prec_center_pairs))
+  #generate pesudoTime
+  LightTree_PerCoordSetRet=LightTree_PerCoordSet(libTimePoint=libTimePoint, #timepoint for each sample
+                                                 cellbelong=cellbelong[tagCell], #which sample each cell belongs to
+                                                 coordinates=rtsne_result$Y, #the coordinate for lineage finding
+                                                 total_state_num=total_state_num, #total number of state used for calculate lineage
+                                                 showing_state_num=showing_state_num, #number of center showing in the plot
+                                                 detectionlimit=detectionlimit, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
+                                                 blockingTime=blockingTime,
+                                                 loopNumPerSmallCycle=loopNumPerSmallCycle,
+                                                 arrows_filter_limit=arrows_filter_limit)
+  #MST based on PesudoTime
+  MSTCT=TimeConditionedMST(coordinates,LightTree_PerCoordSetRet$pseudo_time)
 }
-
 
 LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
                                cellbelong, #which sample each cell belongs to
                                coordinates, #the coordinate for lineage finding
-                               clearTime=NULL, #which timepoint is clearly depends on previous timepoint
                                total_state_num=50, #total number of state used for calculate lineage
-                               showing_state_num=25, #number of center showing in the plot
-                               detectionlimit=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
                                blockingTime=NULL,
                                loopNumPerSmallCycle=50,
-                               arrows_filter_limit=0.25)
+                               arrows_filter_limit=0.25,
+                               displaying_gp_factor=3, #number of center showing in the plot
+                               tolerance_factor=3, #how many sd should the algorithm tolerate to not seperate two cluster in to two continuous group
+                               detectionlimit_percent_cellnum_in_time=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of cell number in given time
+                               detectionlimit_ratio_to_biggest_cluster=0.2 #detection limit for whether a state is valid for a timepoint, default 20% of max state-timepoint cell number
+)
   {
-  ##main chunk
-  #loop loopNum times
+  ptm <- proc.time()
   pseudo_timetable=matrix(0,length(cellbelong),loopNumPerSmallCycle)
   start_end_cells=list()
+  
+  #create cell_dist & filtering
+  celldis=LightTree_celldist_for_core(coordinates,tolerance_factor)
+  #time
+  t=(proc.time() - ptm)[3]
+  t=second_to_humanReadableTime(t)
+  message(paste("celldist done",i,"time:",t[1],"h",t[2],"m",t[3],"s"))
+
+  #loop loopNum times
   for(i in 1:loopNumPerSmallCycle){
+    ptm <- proc.time()
     temp_LightTree=LightTree_core(libTimePoint=libTimePoint,
                                   cellbelong=cellbelong,
-                                  clearTime=clearTime,
-                                  total_state_num=total_state_num,
-                                  detectionlimit=detectionlimit,
                                   coordinates=coordinates,
-                                  blockingTime=blockingTime)
+                                  total_state_num=total_state_num,
+                                  tolerance_factor=tolerance_factor, 
+                                  detectionlimit_percent_cellnum_in_time=detectionlimit_percent_cellnum_in_time, 
+                                  detectionlimit_ratio_to_biggest_cluster=detectionlimit_ratio_to_biggest_cluster,
+                                  blockingTime=blockingTime,
+                                  cell_dist_ret=celldis)
     start_end_cells[[i]]=temp_LightTree$timepoint_center[,c(3,6)]
     pseudo_timetable[,i]=temp_LightTree$cellbelongtable$pseudo_t
+    #time
+    t=(proc.time() - ptm)[3]
+    t=second_to_humanReadableTime(t)
+    message(paste("end loop",i,"time:",t[1],"h",t[2],"m",t[3],"s"))
   }
   pseudo_time=rowMeans(pseudo_timetable)
   pseudo_timeSd=matrixStats::rowSds(pseudo_timetable)
@@ -111,10 +86,11 @@ LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
   #find the average tree
   start_end_cell_df=do.call(rbind,start_end_cells)
   #the function
+  message("start tree ave")
   ave_tree_df=arrows_clustering(start_end_cell_df=start_end_cell_df,
-                                arrow_strength=NULL,
-                                showing_state_num=showing_state_num,
                                 coordinates=coordinates,
+                                arrow_strength=NULL,
+                                grouping_tolerance=displaying_gp_factor,
                                 arrows_filter_limit=arrows_filter_limit)
   
   return(return_obj=list(pseudo_time=pseudo_time,
@@ -123,51 +99,76 @@ LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
 }
 
 
+
+LightTree_celldist_for_core=function(coordinates, #the coordinate for lineage finding
+                                     tolerance_factor=3) #how many sd should the algorithm tolerate to not seperate two cluster in to two continuous group
+{
+  #filter outliers based on hclust single linkage
+  fit=fastcluster::hclust.vector(coordinates, method='single')
+  groups <- cutree(fit, h=median(fit$height)+tolerance_factor*sd(fit$height))
+  #rm small groups
+  gp_filter_ret=gp_filter(groups,10)
+  
+  cell_dis=as.matrix(dist(coordinates[-gp_filter_ret$rm_tag,]))
+  return(list(gp_filter_ret=gp_filter_ret,
+              cell_dis=cell_dis))
+}
+
+
 LightTree_core=function(libTimePoint, #timepoint for each sample
-                   cellbelong, #which sample each cell belongs to
-                   coordinates, #the coordinate for lineage finding
-                   clearTime=NULL, #which timepoint is clearly depends on previous timepoint
-                   total_state_num=30, #total number of state used for plot lineage
-                   detectionlimit=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of max state-timepoint cell number
-                   blockingTime=NULL
-                   )
-  {
+                        cellbelong, #which sample each cell belongs to
+                        coordinates, #the coordinate for lineage finding
+                        total_state_num=30, #total number of state used for plot lineage
+                        blockingTime=NULL, #all states in following time can only link to state at or after blockingTime
+                        tolerance_factor=3, #how many sd should the algorithm tolerate to not seperate two cluster in to two continuous group
+                        detectionlimit_percent_cellnum_in_time=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of cell number in given time
+                        detectionlimit_ratio_to_biggest_cluster=0.2, #detection limit for whether a state is valid for a timepoint, default 20% of max state-timepoint cell number
+                        cell_dist_ret #returned obj from LightTree_core_celldist
+                        
+){
+  gp_filter_ret=cell_dist_ret$gp_filter_ret
+  
   #PART I
   #generating some variable
   #generate cellbelongtable from libTimePoint and cellbelong
   cellbelongtable=data.frame(
     timepoint=libTimePoint$timeorder[match(cellbelong,libTimePoint$lib)],
     pseudo_t=rep(0,nrow(coordinates)),
-    timepoint_state_kmean=rep(0,nrow(coordinates)),
+    timepoint_state_clustering=rep(0,nrow(coordinates)),
     state_center_cell_id=rep(0,nrow(coordinates)),
     lib=cellbelong
   )
   timepoint_num=max(libTimePoint$timeorder)
-  clearTime=union(1,clearTime)
-  unclearTime=setdiff(1:timepoint_num,clearTime)
   
-  cell_num=nrow(coordinates)
   
   #PART II
   #cell belonging
-  time_state_num=c()
-  
   #check global cluster num and pre-run shit with kmean
   if(is.null(total_state_num)){
-    properK=round(nrow(cellbelongtable)/50*2)
+    properK=round(nrow(cellbelongtable)/25)
   }else{
     properK=total_state_num
   }
   
   #Kmean
   kmean_result = kmeans(coordinates,centers = properK,iter.max = 100)
-  cellbelongtable$timepoint_state_kmean=kmean_result$cluster
+  cellbelongtable$timepoint_state_clustering=kmean_result$cluster
   
   #cluster distance
-  cluster_dis=as.matrix(dist(kmean_result$centers))
-  diag(cluster_dis)=Inf
-  
+  cluster_dis_singlelink=matrix(0,properK,properK)
+  for(i in 2:properK){
+    for(j in 1:(i-1)){
+      cluster_dis_singlelink[i,j]=min(cell_dist_ret$cell_dis[kmean_result$cluster[-gp_filter_ret$rm_tag]==i,
+                                    kmean_result$cluster[-gp_filter_ret$rm_tag]==j])
+    }
+  }
+  cluster_dis_singlelink=cluster_dis_singlelink+t(cluster_dis_singlelink)
+  diag(cluster_dis_singlelink)=Inf
 
+  #cluster clusters into super cluster, threshold determined
+  MST=vegan::spantree(dist(coordinates[-gp_filter_ret$rm_tag,]))
+  segregation_threshold=median(MST$dist)+tolerance_factor*sd(MST$dist)
+  
   #find timepoint_center in each state
   #state time center
   state_time_center=matrix(0,properK,timepoint_num)
@@ -202,8 +203,8 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
   #time-groups filtering/assignment
   state_time_cellnum_norm=t(apply(state_time_cellnum,1,function(x){x/sum(x)}))
   for(i in 1:timepoint_num){
-    fail_cell_num=which(state_time_cellnum[,i]<max(state_time_cellnum[,i])*detectionlimit)
-    fail_cell_ratio=which(state_time_cellnum[,i]<0.05)
+    fail_cell_num=which(state_time_cellnum[,i]<max(state_time_cellnum[,i])*detectionlimit_ratio_to_biggest_cluster)
+    fail_cell_ratio=which(state_time_cellnum_norm[,i]<detectionlimit_percent_cellnum_in_time)
     state_time_center[union(fail_cell_num,fail_cell_ratio),i]=0
   }
   for(j in 1:properK){
@@ -257,46 +258,55 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
       curr_center_cord=coordinates[starting_cell,]
       
       for(j in 1:length(current_state)){
-        precusor_state[j]=prev_states[which.min(cluster_dis[current_state[j],prev_states])]
+        precusor_state[j]=prev_states[which.min(cluster_dis_singlelink[current_state[j],prev_states])]
         precusor_time[j]=which(state_time_center[precusor_state[j],]>0)
         if(length(precusor_time[j])>1){stop(paste0("more than one starting time point for state",precusor_state[j]))}
         prec[j]=state_time_center[precusor_state[j],precusor_time[j]]
-        prec_state_dis[j]=min(cluster_dis[current_state[j],prev_states])
+        prec_state_dis[j]=min(cluster_dis_singlelink[current_state[j],prev_states])
       }
       
       #adjust prevusor in uncertainty timepoints
       #the only uncertain condition will be if the at least one of the timepoint_state do not have precusor in the same state
-      if(i %in% unclearTime){
-        #correct the lineage by moving the lineage from previous timepoint to current time point
-        #if the moving can save total distance
-        if(length(current_state)>1){
-          #construct distance matrix between all centers
-          #for current state
-          current_state_dis_mat=cluster_dis[current_state,current_state]
-          current_state_dis_mat[upper.tri(current_state_dis_mat)]=0
-          diag(current_state_dis_mat)=0
-          #all precusor center at prev timepoint as considered as one
-          current_state_dis_mat=cbind(prec_state_dis,current_state_dis_mat)
-          
-          #matrix to data.frame
-          current_state_dis_mat=Matrix(current_state_dis_mat,sparse=T)
-          current_state_dis_df=SparseMatrix2Matrix(current_state_dis_mat) #to matrix, not dataframe
-          current_state_dis_df[,1]=current_state_dis_df[,1]+1
-          
-          #construct minimum spanning tree
-          MST=optrees::getMinimumSpanningTree(1:ncol(current_state_dis_mat),current_state_dis_df,
-                                              algorithm="Prim",start.node=1,show.data =F,show.graph = F)
-          MST$tree.arcs[,1:2]=MST$tree.arcs[,1:2]-1
-          
-          #change precusor by go through the MST
-          for(x in 1:nrow(MST$tree.arcs)){
-            current_arc=MST$tree.arcs[x,]
-            #if the originating tp_state is not precusor in prev timepoint
-            if(current_arc[1]!=0){
-              #change the target tp_state's precusor to cooresponding precusor in current tp
-              prec[current_arc[2]]=starting_cell[current_arc[1]]
-              precusor_time[current_arc[2]]=i
-              precusor_state[current_arc[2]]=current_state[current_arc[1]]
+
+      #correct the lineage by moving the lineage from previous timepoint to current time point
+      #if the moving can save total distance
+      if(length(current_state)>1){
+        #determine the number of continuous chunk in current state
+        #i.e. super cluster determination
+        current_dis=cluster_dis_singlelink[current_state,current_state]
+        gps=get_groups(current_dis,segregation_threshold,current_state)
+        for(x_gps in 1:length(gps)){
+          if(length(gps[[x_gps]])>1){
+            current_state_ingps=gps[[x_gps]]
+            prec_state_dis_ingps=prec_state_dis[match(gps[[x_gps]],current_state)]
+            #construct distance matrix between all centers
+            #for current state
+            current_state_dis_mat=cluster_dis_singlelink[current_state_ingps,current_state_ingps]
+            current_state_dis_mat[upper.tri(current_state_dis_mat)]=0
+            diag(current_state_dis_mat)=0
+            #all precusor center at prev timepoint as considered as one
+            current_state_dis_mat=cbind(prec_state_dis_ingps,current_state_dis_mat)
+            
+            #matrix to data.frame
+            current_state_dis_mat=Matrix::Matrix(current_state_dis_mat,sparse=T)
+            current_state_dis_df=SparseMatrix2Matrix(current_state_dis_mat) #to matrix, not dataframe
+            current_state_dis_df[,1]=current_state_dis_df[,1]+1
+            
+            #construct minimum spanning tree
+            MST=optrees::getMinimumSpanningTree(1:ncol(current_state_dis_mat),current_state_dis_df,
+                                                algorithm="Prim",start.node=1,show.data =F,show.graph = F)
+            MST$tree.arcs[,1:2]=MST$tree.arcs[,1:2]-1
+            
+            #change precusor by go through the MST
+            for(x in 1:nrow(MST$tree.arcs)){
+              current_arc=MST$tree.arcs[x,]
+              #if the originating tp_state is not precusor in prev timepoint
+              if(current_arc[1]!=0){
+                #change the target tp_state's precusor to cooresponding precusor in current tp
+                prec[match(gps[[x_gps]],current_state)][current_arc[2]]=starting_cell[match(gps[[x_gps]],current_state)][current_arc[1]]
+                precusor_time[match(gps[[x_gps]],current_state)][current_arc[2]]=i
+                precusor_state[match(gps[[x_gps]],current_state)][current_arc[2]]=current_state_ingps[current_arc[1]]
+              }
             }
           }
         }
@@ -316,7 +326,7 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
         
         #construct distance matrix between all centers
         #for current state
-        current_state_dis_mat=cluster_dis[current_state,current_state]
+        current_state_dis_mat=cluster_dis_singlelink[current_state,current_state]
         current_state_dis_mat[upper.tri(current_state_dis_mat)]=0
         diag(current_state_dis_mat)=0
         current_state_dis_mat=cbind(prec_state_dis,current_state_dis_mat)
@@ -353,11 +363,11 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
     if(length(precusor_state)!=length(prec)){stop("i")}
   }
   timepoint_center=data.frame(timepoint=timepoint,
-                               state=timepoint_state,
-                               center=timepoint_center,
-                               prec_time=prec_time,
-                               prec_state=prec_state,
-                               prec_center=prec_center)
+                              state=timepoint_state,
+                              center=timepoint_center,
+                              prec_time=prec_time,
+                              prec_state=prec_state,
+                              prec_center=prec_center)
   
   ##the core part finished
   ##starting to calculate the timepoint information
@@ -365,7 +375,8 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
   for(i in timepoint_center$state){
     pseudo_timePerState[i]=length(States_In_Timeline(timepoint_center,i))
   }
-  cellbelongtable$pseudo_t=pseudo_timePerState[cellbelongtable$timepoint_state_kmean]
+  pseudo_timePerState[pseudo_timePerState==0]=NA
+  cellbelongtable$pseudo_t=pseudo_timePerState[cellbelongtable$timepoint_state_clustering]
   
   ##return / end of function
   return(return_obj=list(timepoint_center=timepoint_center,

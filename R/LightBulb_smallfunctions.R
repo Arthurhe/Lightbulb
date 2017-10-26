@@ -1,8 +1,6 @@
 #all the random small functions
 #in dev
 
-devtools::use_package('Matrix')
-
 SparseMatrix2Dataframe=function(mat,orderByRow=T){
   #get the data frame version of the sparse matrix object mat 
   summ=Matrix::summary(mat)
@@ -36,27 +34,34 @@ States_In_Timeline=function(timepoint_centers,starting_state,stoping_state=0){
 }
 
 arrows_clustering=function(start_end_cell_df,
-                           arrow_strength=NULL,
-                           showing_state_num,
                            coordinates,
-                           arrows_filter_limit=0.1)
+                           arrows_filter_limit=0.1,
+                           arrow_strength=NULL,
+                           grouping_tolerance=3) #the tolerance sd number use to cut hierachical clustering tree / method: ward
 {
   #start is now
   #end is previous/last
-  start_cell_posi=coordinates[start_end_cell_df[,1],]
-  end_cell_posi=coordinates[start_end_cell_df[,2],]
   #clustering the end point
-  startend_kmean=kmeans(rbind(start_cell_posi,end_cell_posi),centers=showing_state_num, iter.max = 100,nstart = 10)
-  start_states=startend_kmean$cluster[1:nrow(start_cell_posi)]
-  end_states=rep(0,nrow(start_cell_posi))
-  end_states[which(start_end_cell_df[,2]!=0)]=startend_kmean$cluster[(nrow(start_cell_posi)+1):length(startend_kmean$cluster)]
+  fit=fastcluster::hclust.vector(coordinates, method='ward')
+  groups <- cutree(fit, h=median(fit$height)+grouping_tolerance*sd(fit$height))
+  state_num=max(groups)
+  start_states=groups[start_end_cell_df[,1]]
+  end_states=rep(0,length(start_states))
+  end_states[which(start_end_cell_df[,2]!=0)]=groups[start_end_cell_df[,2]]
+  
+  gp_center=matrix(0,max(groups),ncol(coordinates))
+  for(i in 1:max(groups)){
+    gp_center[i,]=colMeans(coordinates[groups==i,])
+  }
+  
   #find cluster center (the cell)
-  dist_tocenter=proxy::dist(startend_kmean$centers,coordinates)
-  centercell=sapply(1:showing_state_num,function(x){which.min(dist_tocenter[x,])})
+  dist_tocenter=proxy::dist(gp_center,coordinates)
+  
+  centercell=sapply(1:state_num,function(x){which.min(dist_tocenter[x,])})
   
   #build tree table
   ave_tree=list()
-  for(i in 1:showing_state_num){
+  for(i in 1:state_num){
     if(is.null(arrow_strength)){
       #if no arrow_strength, each arrow is consider as strength 1
       last_states=table(end_states[which(start_states==i)])
@@ -112,49 +117,10 @@ second_to_humanReadableTime=function(t){
 }
 
 
-
-#########################################################
-# This program is part of the SNN-Cliq method           #
-# Contact Chen Xu at UNC-Charlotte for more information.# 
-#########################################################
-#----- example of use------#
-#data<-read.table(infile, header=TRUE, sep="\t", row.names=1);
-#data<-log2(data+1)
-#source('SNN.R')
-#SNN(data, edge_file, k=3, distance='euclidean')
-#--------------------------#
-
-
-SNN<-function(coordinate, k=3, distance="euclidean"){
-  # other distance options refer to dist() in R
-  # data is a data.frame with row represent samples
-  numSpl<-nrow(coordinate)
-  x<-dist(coordinate, distance, diag=TRUE, upper=TRUE)
-  x<-as.matrix(x)
-  IDX<-t(apply(x,1,order)[1:k,]) # knn list
-  
-  edges<-list()              # SNN graph
-  for (i in 1:numSpl){
-    j<-i
-    while (j<numSpl){
-      j<-j+1
-      shared<-intersect(IDX[i,], IDX[j,])
-      if(length(shared)>0){			
-        s<-k-0.5*(match(shared, IDX[i,])+match(shared, IDX[j,]))
-        strength<-max(s)
-        if (strength>0)
-          edges<-rbind(edges, c(i,j,strength))
-      }	
-    }
-  }
-  write.table(edges, "SNN_edges_temp", quote=FALSE, sep='\t',col.names=FALSE,row.names=FALSE)
-  system(paste0("/home/ahe/SNN_cliq.py -i SNN_edges_temp -o SNN_out_temp"))
-  gps=data.table::fread("SNN_out_temp",header=F,data.table=F)
-  gps=gps[,1]
-  return(list(gps=gps,edges=edges))
-}
-    
 DEG_wilcox_UMI=function(group1,group2){
+  if(sum(colnames(group1)!=colnames(group2))>0){
+    warning("gene names are different between group1 and group2")
+  }
   p=rep(1,ncol(group1))
   foldchange=rep(1,ncol(group1))
   g1_pos=colSums(group1)>0
@@ -165,8 +131,8 @@ DEG_wilcox_UMI=function(group1,group2){
   tag=which(g1_pos | g2_pos)
   foldchange[tag]=sapply(tag,function(x){log2(mean(group1[,x]))-log2(mean(group2[,x]))})
   foldchange[which(g1_pos>g2_pos)]=Inf
-  foldchange[which(g1_pos<g2_pos)]=-Inf
-  o=cbind(log10(p),log2(foldchange))
+  foldchange[which(g1_pos<g2_pos)]=0
+  o=data.frame(log10pval=log10(p),log2foldchange=log2(foldchange))
   colnames(o)=c("pval","foldchange")
   return(o)
 }
@@ -214,4 +180,56 @@ group_reassigning=function(current_gps,target_gps){
     colnames(tbl_gps)[which.max(x)]
   })
   return(obj=list(gp_assignment=new_gp_assignment,gp_description=new_gp_description,gp_table=tbl_gps))
+}
+
+
+TimeConditionedMST=function(coord,time_vec){
+  time_vec=time_vec+rnorm(length(time_vec), mean = 0, sd = 0.001)
+  #initialize fake init
+  coord=rbind(rep(Inf,ncol(coord)),coord)
+  time_vec=c(-Inf,time_vec)
+  dist_matrix=dist(coord)
+  dist_matrix=as.matrix(dist_matrix)
+  #init the rest
+  node_num=length(time_vec)
+  mon=rep(0,node_num)
+  dis=rep(0,node_num)
+  #loop
+  for(i in 2:node_num){
+    origin_candidate=which(time_vec<time_vec[i])
+    mon[i]=origin_candidate[which.min(dist_matrix[i,origin_candidate])]
+    dis[i]=dist_matrix[i,mon[i]]
+  }
+  mon=mon[-1]
+  mon=mon-1
+  dis=dis[-1]
+  return(list(mon=mon,distance=dis))
+}
+
+get_groups=function(dist_mat,threshold,label=colnames(dist_mat)){
+  dist_mat=as.dist(dist_mat)
+  fit=hclust(dist_mat,method = "single")
+  hgp=cutree(fit,h=threshold)
+  gp=list()
+  for(i in 1:max(hgp)){
+    gp[[i]]=label[which(hgp==i)]
+  }
+  return(gp)
+}
+
+
+gp_filter=function(gps,threshold){
+    #unwantted groups will be assign to 0
+    gps_stat=table(gps)
+    rm_tag=which(gps %in% which(gps_stat<threshold))
+    #assign unwanted groups to 0
+    gps[rm_tag]=0
+    #map old id to new id
+    remain_gp_id=which(gps_stat>=threshold)
+    new_id=1:length(remain_gp_id)
+    new_gps=gps
+    for(i in new_id){
+        new_gps[gps==remain_gp_id[i]]=i
+    }
+    return(list(gps=new_gps,rm_tag=rm_tag))
 }
