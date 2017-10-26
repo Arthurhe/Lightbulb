@@ -43,7 +43,7 @@ LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
                                blockingTime=NULL,
                                loopNumPerSmallCycle=50,
                                arrows_filter_limit=0.25,
-                               displaying_gp_factor=3, #number of center showing in the plot
+                               displaying_gp_factor=3, #
                                tolerance_factor=3, #how many sd should the algorithm tolerate to not seperate two cluster in to two continuous group
                                detectionlimit_percent_cellnum_in_time=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of cell number in given time
                                detectionlimit_ratio_to_biggest_cluster=0.2 #detection limit for whether a state is valid for a timepoint, default 20% of max state-timepoint cell number
@@ -54,7 +54,7 @@ LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
   start_end_cells=list()
   
   #create cell_dist & filtering
-  celldis=LightTree_celldist_for_core(coordinates,tolerance_factor)
+  celldis=LightTree_celldist_filter(coordinates,tolerance_factor)
   #time
   t=(proc.time() - ptm)[3]
   t=second_to_humanReadableTime(t)
@@ -99,16 +99,32 @@ LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
 
 
 
-LightTree_celldist_for_core=function(coordinates, #the coordinate for lineage finding
-                                     tolerance_factor=3) #how many sd should the algorithm tolerate to not seperate two cluster in to two continuous group
+LightTree_celldist_filter=function(coordinates, #the coordinate for lineage finding, 
+                                                  #a list of coordinate, or a single matrix
+                                  tolerance_factor=3) #how many sd should the algorithm tolerate to not seperate two cluster in to two continuous group
 {
+  if(is.null(dim(coordinates))){
+    if(length(coordinates)==0){
+      stop("empty coordinate list")
+    }
+    #processing list
+    cell_dis=matrix(0,nrow(coordinates[[1]]),nrow(coordinates[[1]]))
+    for(i in 1:length(coordinates)){
+      tmp=as.matrix(dist(coordinates[[i]]))
+      scale_factor=mean(tmp)/100
+      cell_dis=cell_dis+tmp/scale_factor
+    }
+    cell_dis=cell_dis/length(coordinates)
+  }else{
+    cell_dis=as.matrix(dist(coordinates))
+  }
+
   #filter outliers based on hclust single linkage
-  fit=fastcluster::hclust.vector(coordinates, method='single')
+  fit=fastcluster::hclust(as.dist(cell_dis), method='single')
   groups <- cutree(fit, h=median(fit$height)+tolerance_factor*sd(fit$height))
   #rm small groups
   gp_filter_ret=gp_filter(groups,10)
   
-  cell_dis=as.matrix(dist(coordinates[-gp_filter_ret$rm_tag,]))
   return(list(gp_filter_ret=gp_filter_ret,
               cell_dis=cell_dis))
 }
@@ -116,11 +132,12 @@ LightTree_celldist_for_core=function(coordinates, #the coordinate for lineage fi
 
 LightTree_core=function(libTimePoint, #timepoint for each sample
                         cellbelong, #which sample each cell belongs to
-                        coordinates, #the coordinate for lineage finding
+                        coordinates, #the coordinate for plotting
                         total_state_num=30, #total number of state used for plot lineage
                         blockingTime=NULL, #all states in following time can only link to state at or after blockingTime
                         tolerance_factor=3, #how many sd should the algorithm tolerate to not seperate two cluster in to two continuous group
-                        detectionlimit_percent_cellnum_in_time=0.1, #detection limit for whether a state is valid for a timepoint, default 10% of cell number in given time
+                        displaying_gp_factor=3, 
+                        detectionlimit_percent_cellnum_in_time=0.05, #detection limit for whether a state is valid for a timepoint, default 10% of cell number in given time
                         detectionlimit_ratio_to_biggest_cluster=0.2, #detection limit for whether a state is valid for a timepoint, default 20% of max state-timepoint cell number
                         cell_dist_ret #returned obj from LightTree_core_celldist
                         
@@ -132,9 +149,9 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
   #generate cellbelongtable from libTimePoint and cellbelong
   cellbelongtable=data.frame(
     timepoint=libTimePoint$timeorder[match(cellbelong,libTimePoint$lib)],
-    pseudo_t=rep(0,nrow(coordinates)),
-    timepoint_state_clustering=rep(0,nrow(coordinates)),
-    state_center_cell_id=rep(0,nrow(coordinates)),
+    pseudo_t=rep(0,length(cellbelong)),
+    timepoint_state_clustering=rep(0,length(cellbelong)),
+    state_center_cell_id=rep(0,length(cellbelong)),
     lib=cellbelong
   )
   timepoint_num=max(libTimePoint$timeorder)
@@ -153,35 +170,39 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
   #kmean_result = kmeans(coordinates,centers = properK,iter.max = 100)
   #clustering_result=kmean_result$cluster
   #hierachical ward
-  fit=fastcluster::hclust.vector(coordinates, method='ward')
-  clustering_result <- cutree(fit, h=median(fit$height)+tolerance_factor*sd(fit$height))
+  fit=fastcluster::hclust(as.dist(cell_dist_ret$cell_dis), method='ward.D2') #clustering without removing outlier
+  clustering_result <- cutree(fit, h=median(fit$height)+displaying_gp_factor*sd(fit$height))
   properK=max(clustering_result)
-  
   cellbelongtable$timepoint_state_clustering=clustering_result
   
+  cell_dist_ret$cell_dis=cell_dist_ret$cell_dis[-gp_filter_ret$rm_tag,-gp_filter_ret$rm_tag]
+  filtered_cluster_result=clustering_result[-gp_filter_ret$rm_tag]
   #cluster distance
   cluster_dis_singlelink=matrix(0,properK,properK)
   for(i in 2:properK){
     for(j in 1:(i-1)){
-      cluster_dis_singlelink[i,j]=min(cell_dist_ret$cell_dis[clustering_result[-gp_filter_ret$rm_tag]==i,
-                                    clustering_result[-gp_filter_ret$rm_tag]==j])
+      #calculate distance with removing outlier
+      cluster_dis_singlelink[i,j]=min(cell_dist_ret$cell_dis[filtered_cluster_result==i,filtered_cluster_result==j])
     }
   }
   cluster_dis_singlelink=cluster_dis_singlelink+t(cluster_dis_singlelink)
   diag(cluster_dis_singlelink)=Inf
 
   #cluster clusters into super cluster, threshold determined
-  MST=vegan::spantree(dist(coordinates[-gp_filter_ret$rm_tag,]))
+  MST=vegan::spantree(as.dist(cell_dist_ret$cell_dis))
   segregation_threshold=median(MST$dist)+tolerance_factor*sd(MST$dist)
   
   #find timepoint_center in each state
   #state time center
-  state_time_center=matrix(0,properK,timepoint_num)
-  state_time_cellnum=matrix(0,properK,timepoint_num)
-  colnames(state_time_center)=paste0("time_",1:timepoint_num)
-  rownames(state_time_center)=paste0("state_",1:properK)
+  state_time_cellnum=as.matrix(table(clustering_result,cellbelongtable$timepoint))
   colnames(state_time_cellnum)=paste0("time_",1:timepoint_num)
   rownames(state_time_cellnum)=paste0("state_",1:properK)
+  
+  state_time_center=matrix(0,properK,timepoint_num)
+  colnames(state_time_center)=paste0("time_",1:timepoint_num)
+  rownames(state_time_center)=paste0("state_",1:properK)
+
+  center_cell_for_cluster=rep(0,properK)
   for(j in 1:properK){
     tagcell=which(clustering_result==j)#same state center across all timpoint
     if(length(tagcell)>1){
@@ -193,25 +214,39 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
         center_cell=tagcell
       }
     }
-    
+    center_cell_for_cluster[j]=center_cell
     #update cellbelong table
     cellbelongtable$state_center_cell_id[tagcell]=center_cell
-    
-    for(i in 1:timepoint_num){
-      tagcell=intersect(which(clustering_result==j),which(cellbelongtable$timepoint==i))
-      timepointsize=sum(cellbelongtable$timepoint==i)
-      state_time_cellnum[j,i]=length(tagcell)
-      state_time_center[j,i]=center_cell
-    }
+    state_time_center[j,]=center_cell
   }
   
   #time-groups filtering/assignment
   state_time_cellnum_norm=t(apply(state_time_cellnum,1,function(x){x/sum(x)}))
   for(i in 1:timepoint_num){
-    fail_cell_num=which(state_time_cellnum[,i]<max(state_time_cellnum[,i])*detectionlimit_ratio_to_biggest_cluster)
+    fail_cell_num=which(state_time_cellnum[,i]<max(max(state_time_cellnum[,i])*detectionlimit_ratio_to_biggest_cluster,10))
     fail_cell_ratio=which(state_time_cellnum_norm[,i]<detectionlimit_percent_cellnum_in_time)
     state_time_center[union(fail_cell_num,fail_cell_ratio),i]=0
   }
+  
+  #move the first moment of the cluster to the earliest moment of all cluster in groups
+  chained_gps=which(cluster_dis_singlelink<segregation_threshold,arr.ind = T)
+  for(x in 1:timepoint_num){
+    tmp=rep(0,properK)
+    non_exist_state=which(state_time_center[,x]==0)
+    for(y in non_exist_state){
+      brother_state=chained_gps[chained_gps[,1]==y,2]
+      if(length(brother_state)>1){
+        for(z in 1:length(brother_state)){
+          if(state_time_center[brother_state[z],x]>0){
+            tmp[y]=center_cell_for_cluster[y]
+            break
+          }
+        }
+      }
+    }
+    state_time_center[non_exist_state,x]=tmp[non_exist_state]
+  }
+  
   for(j in 1:properK){
     participating_time=which(state_time_center[j,]>0)
     if(length(participating_time)>0){
@@ -219,6 +254,8 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
       state_time_center[j,todrop]=0
     }
   }
+  
+  
   
   #build tree based on existing info
   
