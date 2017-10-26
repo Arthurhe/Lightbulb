@@ -103,3 +103,56 @@ plotting_state_center=function(coord,timepoint_centers,cluster_label){
   
   return(s1)
 }
+
+plot_MST_kid=function(coord,lib_label,MST_kid){
+    data_tab=data.frame(x=coord[,1],y=coord[,2],library=factor(lib_label,levels = unique(lib_label)))
+    mapping_table=data.frame(cbind(coord[-1,],coord[MST_kid,]))
+    colnames(mapping_table)=c("start_x","start_y","stop_x","stop_y")
+    g1=ggplot2::ggplot(data_tab, aes(x, y,colour=library)) + 
+        ggplot2::geom_point(size=1) + 
+        ggplot2::geom_segment(data=mapping_table,aes(x=start_x, xend=stop_x, y=start_y, yend=stop_y), size = 0.4,inherit.aes =F) +
+        ggplot2::theme(legend.position="none")
+    return(g1)
+}
+
+plot_MST_mon=function(coord,lib_label,MST_mon){
+    data_tab=data.frame(x=coord[,1],y=coord[,2],library=factor(lib_label,levels = unique(lib_label)))
+    origin=which(MST_mon==0)
+    origin_coord=coord[origin,]
+    MST_mon=MST_mon[-origin]
+    mapping_table=data.frame(cbind(coord[MST_mon,],coord[-origin,]))
+    colnames(mapping_table)=c("start_x","start_y","stop_x","stop_y")
+    g1=ggplot2::ggplot(data_tab, aes(x, y,colour=library)) + 
+        ggplot2::geom_point(size=1) + 
+        #ggplot2::geom_point(data=origin_coord,inherit.aes =F,aes(x, y),shape=4,colour="firebrick4",size=2.5,stroke = 3) +
+        ggplot2::geom_segment(data=mapping_table,aes(x=start_x, xend=stop_x, y=start_y, yend=stop_y), size = 0.4,inherit.aes =F) +
+        ggplot2::theme(legend.position="none")
+    return(g1)
+}
+
+plot_gps_ggplot=function(coord,lib_label){
+    data_tab=data.frame(x=coord[,1],y=coord[,2],library=factor(lib_label,levels = unique(lib_label)))
+    cell_table=data.table(x=coord[,1],y=coord[,2],lib=lib_label)
+    lib_table=as.data.frame(cell_table[,lapply(.SD, mean), by = lib])
+
+    g1=ggplot2::ggplot(data_tab, aes(x, y,colour=library)) + 
+        ggplot2::geom_point(size=1) + 
+        ggplot2::geom_text(data=lib_table,aes(x, y, label = lib),inherit.aes =F) +
+        ggplot2::theme(legend.position="none")
+    return(g1)
+}
+
+plot_gps=function(coord,lib_label){
+    plot(coord,col=lib_label,cex=0.8,pch=19)
+    cell_table=data.table(x=coord[,1],y=coord[,2],lib=lib_label)
+    lib_table=as.data.frame(cell_table[,lapply(.SD, mean), by = lib])
+    text(lib_table$x,lib_table$y,lib_table$lib)
+}
+
+
+plot_gradient=function(coord,val){
+    rbPal <- colorRampPalette(c('#2b83ba','#abdda4','#ffffbf','#fdae61','#d7191c'))
+    cols=rbPal(25)[as.numeric(cut(val,breaks = 25))]
+    plot(coord,col=cols,cex=0.8,pch=19)
+}
+

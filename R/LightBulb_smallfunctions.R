@@ -219,17 +219,21 @@ get_groups=function(dist_mat,threshold,label=colnames(dist_mat)){
 
 
 gp_filter=function(gps,threshold){
-    #unwantted groups will be assign to 0
-    gps_stat=table(gps)
-    rm_tag=which(gps %in% which(gps_stat<threshold))
-    #assign unwanted groups to 0
-    gps[rm_tag]=0
-    #map old id to new id
-    remain_gp_id=which(gps_stat>=threshold)
-    new_id=1:length(remain_gp_id)
-    new_gps=gps
-    for(i in new_id){
-        new_gps[gps==remain_gp_id[i]]=i
-    }
-    return(list(gps=new_gps,rm_tag=rm_tag))
+  #unwantted groups will be assign to 0
+  gps_stat=table(gps)
+  rm_tag=which(gps %in% which(gps_stat<threshold))
+  #assign unwanted groups to 0
+  gps[rm_tag]=0
+  #map old id to new id
+  remain_gp_id=which(gps_stat>=threshold)
+  new_id=1:length(remain_gp_id)
+  new_gps=gps
+  for(i in new_id){
+    new_gps[gps==remain_gp_id[i]]=i
+  }
+  return(list(gps=new_gps,rm_tag=rm_tag))
+}
+
+rowSds=function(mat,na.rm){
+  return(apply(mat,1,function(x){sd(x,na.rm = na.rm)}))
 }

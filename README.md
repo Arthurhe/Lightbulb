@@ -12,6 +12,6 @@ Todos:
 |LightDE            |   DE with wilcox, TPM adn z | | R | done |
 |LightMagic         |	R wrapper for magic, tailored for lightbulb needs. Remove dropout and finetune expression value |	Magic |	python |	finished |
 |TSNE               |	dimension reduction        |	Rtsne |	R |	existing package | need to test other algo
-|LightTree          |	create lineage tree        |	|	R |	Partial finished, need to narrow the branch and refine cluster connection |
-|LightNet           |	build gene interacion network and identify key gene modules |	|	R |	starting |
+|LightTree          |	create lineage tree        |	|	R |	correct the blocking function, averaging TSNE dist / max |
+|LightNet           |	build gene interacion network and identify key gene modules |	|	R |	coorNet in Tree  |
 |LightPlotSuite |	Plotting functions | |	R |	Partial finished |

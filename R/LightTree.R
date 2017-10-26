@@ -4,7 +4,6 @@
 devtools::use_package('data.table')
 devtools::use_package('Rtsne')
 devtools::use_package('proxy')
-devtools::use_package('matrixStats')
 devtools::use_package('fastcluster')
 devtools::use_package('optrees')
 devtools::use_package('vegan')
@@ -59,11 +58,11 @@ LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
   #time
   t=(proc.time() - ptm)[3]
   t=second_to_humanReadableTime(t)
-  message(paste("celldist done",i,"time:",t[1],"h",t[2],"m",t[3],"s"))
+  message(paste("celldist done. time:",t[1],"h",t[2],"m",t[3],"s"))
 
   #loop loopNum times
+  ptm <- proc.time()
   for(i in 1:loopNumPerSmallCycle){
-    ptm <- proc.time()
     temp_LightTree=LightTree_core(libTimePoint=libTimePoint,
                                   cellbelong=cellbelong,
                                   coordinates=coordinates,
@@ -78,10 +77,10 @@ LightTree_PerCoordSet=function(libTimePoint, #timepoint for each sample
     #time
     t=(proc.time() - ptm)[3]
     t=second_to_humanReadableTime(t)
-    message(paste("end loop",i,"time:",t[1],"h",t[2],"m",t[3],"s"))
   }
-  pseudo_time=rowMeans(pseudo_timetable)
-  pseudo_timeSd=matrixStats::rowSds(pseudo_timetable)
+  message(paste("end loop",i,"time:",t[1],"h",t[2],"m",t[3],"s"))
+  pseudo_time=rowMeans(pseudo_timetable,na.rm = T)
+  pseudo_timeSd=rowSds(pseudo_timetable,na.rm = T)
   
   #find the average tree
   start_end_cell_df=do.call(rbind,start_end_cells)
@@ -151,15 +150,21 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
   }
   
   #Kmean
-  kmean_result = kmeans(coordinates,centers = properK,iter.max = 100)
-  cellbelongtable$timepoint_state_clustering=kmean_result$cluster
+  #kmean_result = kmeans(coordinates,centers = properK,iter.max = 100)
+  #clustering_result=kmean_result$cluster
+  #hierachical ward
+  fit=fastcluster::hclust.vector(coordinates, method='ward')
+  clustering_result <- cutree(fit, h=median(fit$height)+tolerance_factor*sd(fit$height))
+  properK=max(clustering_result)
+  
+  cellbelongtable$timepoint_state_clustering=clustering_result
   
   #cluster distance
   cluster_dis_singlelink=matrix(0,properK,properK)
   for(i in 2:properK){
     for(j in 1:(i-1)){
-      cluster_dis_singlelink[i,j]=min(cell_dist_ret$cell_dis[kmean_result$cluster[-gp_filter_ret$rm_tag]==i,
-                                    kmean_result$cluster[-gp_filter_ret$rm_tag]==j])
+      cluster_dis_singlelink[i,j]=min(cell_dist_ret$cell_dis[clustering_result[-gp_filter_ret$rm_tag]==i,
+                                    clustering_result[-gp_filter_ret$rm_tag]==j])
     }
   }
   cluster_dis_singlelink=cluster_dis_singlelink+t(cluster_dis_singlelink)
@@ -178,7 +183,7 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
   colnames(state_time_cellnum)=paste0("time_",1:timepoint_num)
   rownames(state_time_cellnum)=paste0("state_",1:properK)
   for(j in 1:properK){
-    tagcell=which(kmean_result$cluster==j)#same state center across all timpoint
+    tagcell=which(clustering_result==j)#same state center across all timpoint
     if(length(tagcell)>1){
       thecenter=colMeans(coordinates[tagcell,])
       cell_center_distance=apply(coordinates[tagcell,],1,function(x){sqrt(sum((x-thecenter)^2))})
@@ -193,7 +198,7 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
     cellbelongtable$state_center_cell_id[tagcell]=center_cell
     
     for(i in 1:timepoint_num){
-      tagcell=intersect(which(kmean_result$cluster==j),which(cellbelongtable$timepoint==i))
+      tagcell=intersect(which(clustering_result==j),which(cellbelongtable$timepoint==i))
       timepointsize=sum(cellbelongtable$timepoint==i)
       state_time_cellnum[j,i]=length(tagcell)
       state_time_center[j,i]=center_cell
