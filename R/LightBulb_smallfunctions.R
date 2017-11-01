@@ -21,18 +21,6 @@ SparseMatrix2Matrix=function(mat,orderByRow=T){
   return(matdataframe)
 }
 
-States_In_Timeline=function(timepoint_centers,starting_state,stoping_state=0){
-  prec_state=timepoint_centers$prec_state[which(timepoint_centers$state==starting_state)]
-  timeline=starting_state
-  i=2
-  while(prec_state!=stoping_state){
-    timeline[i]=prec_state
-    prec_state=timepoint_centers$prec_state[which(timepoint_centers$state==prec_state)]
-    i=i+1
-  }
-  return(rev(timeline))
-}
-
 arrows_clustering=function(start_end_cell_df,
                            coordinates,
                            arrows_filter_limit=0.1,
@@ -236,4 +224,123 @@ gp_filter=function(gps,threshold){
 
 rowSds=function(mat,na.rm){
   return(apply(mat,1,function(x){sd(x,na.rm = na.rm)}))
+}
+
+
+singleCap = function(x){
+  y=x
+  for(i in 1:length(x)){
+    y[i]=paste(toupper(substring(x[i], 1,1)), tolower(substring(x[i], 2)),sep="")
+  }
+  return(y)
+}
+
+diff_gene_between_lineage=function(lineage1,lineage2,exp_by_gp,percent=0.1){
+  gnum=ncol(exp_by_gp)
+  lin12_common=intersect(lineage1,lineage2)
+  lin1_specific=setdiff(lineage1,lineage2)
+  lin2_specific=setdiff(lineage2,lineage1)
+  lin12_all=c(lin1_specific,lin2_specific,lin12_common[length(lin12_common)])
+  exp_lin1_specific=exp_by_gp[c(lin12_common[length(lin12_common)],lin1_specific),]
+  exp_lin2_specific=exp_by_gp[c(lin12_common[length(lin12_common)],lin2_specific),]
+  exp_lin12=exp_by_gp[lin12_all,]
+  #find non-zero gene
+  taggene=which(apply(exp_lin12,2,function(x){length(unique(x))>1}))
+
+  meandif=rep(0,gnum)
+  meandif[taggene]=sapply(taggene,function(x){mean(exp_lin1_specific[,x])-mean(exp_lin2_specific[,x])})
+  
+  wilcox_p=rep(1,gnum)
+  wilcox_p[taggene]=sapply(taggene,function(x){wilcox.test(exp_lin1_specific[,x],exp_lin2_specific[,x],exact=F)$p.value})
+  #wilcox_p=p.adjust(wilcox_p,method = 'fdr')
+  
+  dtw_dis=rep(0,gnum)
+  dtw_dis[taggene]=sapply(taggene,function(x){dtw::dtw(exp_lin1_specific[,x],exp_lin2_specific[,x],open.end=T,distance.only=T)$normalizedDistance})
+  
+  #sd_ratio=rep(1,gnum)
+  #sd_ratio[taggene]=log2(lin1_sd[taggene]/lin2_sd[taggene])
+  
+  topx=round(gnum*percent)
+  toselect= (abs(meandif) > sort(abs(meandif),decreasing = T)[topx] &
+               wilcox_p < sort(wilcox_p,decreasing = F)[topx] &
+               dtw_dis > sort(dtw_dis,decreasing = T)[topx] )
+ 
+  return(data.frame(meandif=meandif,wilcox_p=wilcox_p,dtw_dis=dtw_dis,toselect=toselect))
+}
+
+State_relabeling=function(cellbelongtable,timepoint_center){
+  Endpoint_state_ret=Endpoint_state(timepoint_center)
+  old_group_name_to_replace=unlist(Endpoint_state_ret$unique_timeline)
+  new_group_name=1:length(old_group_name_to_replace)
+  cellbelongtable$state=gp_name_replacing(cellbelongtable$state,old_group_name_to_replace,new_group_name)
+  timepoint_center$state=gp_name_replacing(timepoint_center$state,old_group_name_to_replace,new_group_name)
+  timepoint_center$prec_state=gp_name_replacing(timepoint_center$prec_state,old_group_name_to_replace,new_group_name)
+  return(list(cellbelongtable=cellbelongtable,
+              timepoint_center=timepoint_center))
+}
+
+Endpoint_state=function(timepoint_center){
+  origin_state=timepoint_center$state[timepoint_center$prec_state==0]
+  end_point_state=timepoint_center$state[!timepoint_center$state %in% timepoint_center$prec_state]
+  if(length(origin_state)>1){
+    stop("multiple origin state!")
+  }
+  #order the end point by unique length
+  timelines=list()
+  timeline_length=rep(0,length(end_point_state))
+  for(i in 1:length(end_point_state)){
+    timelines[[i]]=States_In_Timeline(timepoint_center,starting_state=end_point_state[i],stoping_state=origin_state)
+    timeline_length[i]=length(timelines[[i]])
+  }
+  #order the timeline by length
+  timelines=timelines[order(timeline_length,decreasing = T)]
+  end_point_state=end_point_state[order(timeline_length,decreasing = T)]
+  timeline_length=sort(timeline_length,decreasing = T)
+  #order timeline by longest unique length
+  unique_timeline=list()
+  unique_timeline_length=rep(0,length(end_point_state))
+  used_state=c()
+  for(i in 1:length(end_point_state)){
+    unique_timeline[[i]]=setdiff(timelines[[i]],used_state)
+    used_state=c(used_state,unique_timeline[[i]])
+    unique_timeline_length[i]=length(unique_timeline[[i]])
+  }
+  #order the timeline by length
+  end_point_state=end_point_state[order(unique_timeline_length,decreasing = T)]
+  timelines=timelines[order(unique_timeline_length,decreasing = T)]
+  timeline_length=timeline_length[order(unique_timeline_length,decreasing = T)]
+  unique_timeline=unique_timeline[order(unique_timeline_length,decreasing = T)]
+  unique_timeline_length=sort(unique_timeline_length,decreasing = T)  
+  return(list(end_point_state=end_point_state,
+              timelines=timelines,
+              timeline_length=timeline_length,
+              unique_timeline=unique_timeline,
+              unique_timeline_length=unique_timeline_length))
+}
+
+States_In_Timeline=function(timepoint_center,starting_state,stoping_state=0){
+  prec_state=timepoint_center$prec_state[which(timepoint_center$state==starting_state)]
+  timeline=starting_state
+  i=2
+  while(prec_state!=stoping_state){
+    timeline[i]=prec_state
+    prec_state=timepoint_center$prec_state[which(timepoint_center$state==prec_state)]
+    i=i+1
+  }
+  timeline[i]=stoping_state
+  return(rev(timeline))
+}
+
+gp_name_replacing=function(old_group_assignment,old_group_name_to_replace,new_group_name,force_replace=F){
+  all_old_gp_name=unique(old_group_assignment)
+  if(!force_replace){
+    keeping_group_name=setdiff(all_old_gp_name,old_group_assignment)
+    if(any(new_group_name %in% keeping_group_name)){
+      stop("there's new group name same as old group name that are not supposed to replace, set force_replace=T if want to force replace")
+    }
+  }
+  new_group_assignment=old_group_assignment
+  tag_unit=which(old_group_assignment %in% old_group_name_to_replace)
+  new_group_assignment[tag_unit]=new_group_name[match(old_group_assignment[tag_unit],old_group_name_to_replace)]
+  return(new_group_assignment)
 }

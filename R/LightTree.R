@@ -150,7 +150,7 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
   cellbelongtable=data.frame(
     timepoint=libTimePoint$timeorder[match(cellbelong,libTimePoint$lib)],
     pseudo_t=rep(0,length(cellbelong)),
-    timepoint_state_clustering=rep(0,length(cellbelong)),
+    state=rep(0,length(cellbelong)),
     state_center_cell_id=rep(0,length(cellbelong)),
     lib=cellbelong
   )
@@ -173,7 +173,7 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
   fit=fastcluster::hclust(as.dist(cell_dist_ret$cell_dis), method='ward.D2') #clustering without removing outlier
   clustering_result <- cutree(fit, h=median(fit$height)+displaying_gp_factor*sd(fit$height))
   properK=max(clustering_result)
-  cellbelongtable$timepoint_state_clustering=clustering_result
+  cellbelongtable$state=clustering_result
   
   cell_dist_ret$cell_dis=cell_dist_ret$cell_dis[-gp_filter_ret$rm_tag,-gp_filter_ret$rm_tag]
   filtered_cluster_result=clustering_result[-gp_filter_ret$rm_tag]
@@ -418,7 +418,7 @@ LightTree_core=function(libTimePoint, #timepoint for each sample
     pseudo_timePerState[i]=length(States_In_Timeline(timepoint_center,i))
   }
   pseudo_timePerState[pseudo_timePerState==0]=NA
-  cellbelongtable$pseudo_t=pseudo_timePerState[cellbelongtable$timepoint_state_clustering]
+  cellbelongtable$pseudo_t=pseudo_timePerState[cellbelongtable$state]
   
   ##return / end of function
   return(return_obj=list(timepoint_center=timepoint_center,
