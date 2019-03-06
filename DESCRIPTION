@@ -16,4 +16,6 @@ Imports: Rtsne,
     data.table,
     fastcluster,
     optrees,
-    vegan
+    vegan,
+    Seurat
+RoxygenNote: 6.1.0
