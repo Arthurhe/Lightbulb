@@ -13,12 +13,10 @@ bulk_list_normalize(bulk_list)
 an bulk_list object
 }
 \description{
-This function loads a list object contains all the bulk RNA-seq samples. It 
-normalizes the bulk RNA-seq data to log2 TPM. The input object should looks like this
-bulk_list=list(sample_set1=list(sample1=sample1_gene_expression,
-                                sample2=sample2_gene_expression),
-               sample_set2=list(sample3=sample3_gene_expression),
-                                sample4=sample4_gene_expression))
+This function loads a list object contains all the bulk RNA-seq samples. It normalizes
+the bulk RNA-seq data to log2 TPM. The input object should looks like this:
+bulk_list=list(sample_set1=list(sample1=sample1_gene_expression,sample2=sample2_gene_expression),
+               sample_set2=list(sample3=sample3_gene_expression),sample4=sample4_gene_expression))
 sampleX_gene_expression can be either a vector, or a data.frame that each row is a replicate, each col is a gene.
 the gene order of all sampleX_gene_expression must be the same
 }

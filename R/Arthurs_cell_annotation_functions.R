@@ -1,11 +1,9 @@
 #' prepare and normalize the bulk list object for "data_preprocessing"
 #'
-#' This function loads a list object contains all the bulk RNA-seq samples. It 
-#' normalizes the bulk RNA-seq data to log2 TPM. The input object should looks like this
-#' bulk_list=list(sample_set1=list(sample1=sample1_gene_expression,
-#'                                 sample2=sample2_gene_expression),
-#'                sample_set2=list(sample3=sample3_gene_expression),
-#'                                 sample4=sample4_gene_expression))
+#' This function loads a list object contains all the bulk RNA-seq samples. It normalizes
+#' the bulk RNA-seq data to log2 TPM. The input object should looks like this:
+#' bulk_list=list(sample_set1=list(sample1=sample1_gene_expression,sample2=sample2_gene_expression),
+#'                sample_set2=list(sample3=sample3_gene_expression),sample4=sample4_gene_expression))
 #' sampleX_gene_expression can be either a vector, or a data.frame that each row is a replicate, each col is a gene.
 #' the gene order of all sampleX_gene_expression must be the same
 #' 
@@ -31,7 +29,23 @@ bulk_list_normalize=function(bulk_list){
     return(bulk_list)
 }
 
-data_preprocessing=function(bulk_list,sc_mat,gene_id){
+
+#' process the list of bulk samples, the single cell matrix into a single object for downstream analysis
+#'
+#' This function loads the bulk_list object output by "bulk_list_normalize", a single cell matrix and a gene id vector
+#' each row of the single cell matrix is a row, and each column is a gene. 
+#' The gene id vector must be identical to the gene order of the single cell matrix, and the gene order of bulk_list
+#' 
+#' @param bulk_list input bulk list
+#' @param sc_mat input single cell / super cell matrix
+#' @param gene_id input gene id vector
+#' @return an data_set object
+#' @export
+data_preprocessing=function(bulk_list,sc_mat,gene_id=NULL){
+    if(is.null(gene_id)){
+        gene_id=colnames(sc_mat)
+    }
+    
     #function start
     bulk_list_centered=list()
     bulk_df=list()
@@ -78,6 +92,11 @@ data_preprocessing=function(bulk_list,sc_mat,gene_id){
                 replicate_df=replicate_df))
 }
 
+#' plot the distribution of sc to mean expresion of each sample set
+#' 
+#' @param dataset dataset object ouput by data_preprocessing
+#' @param plot_sets which plot set to pick (number_id or name)
+#' @export
 plot_SC_sampleSet_cor_distribution=function(dataset,plot_sets=NULL){
     if(is.null(dataset$SC_sampleSet_cor)){
         stop("SC_sampleSet_cor not found, run function \"data_preprocessing\" first")
@@ -89,11 +108,15 @@ plot_SC_sampleSet_cor_distribution=function(dataset,plot_sets=NULL){
     
     #plot
     for(i in plot_sets){
-        plot(density(dataset$SC_sampleSet_cor[,i]),main=colnames(dataset$SC_sampleSet_cor)[i])
+        plot(density(dataset$SC_sampleSet_cor[,i]),main=colnames(dataset$SC_sampleSet_cor)[i],xlab="correlation")
         abline(v=seq(-1,1,0.1),lty=2)
     }
 }
 
+#' plot the correlation between all bulk samples
+#' 
+#' @param dataset dataset object ouput by data_preprocessing
+#' @export
 plot_bulk_bulk_cor=function(dataset){
     if(is.null(dataset$replicate_df)){
         stop("replicate_df not found, run function \"data_preprocessing\" first")
@@ -108,13 +131,21 @@ plot_bulk_bulk_cor=function(dataset){
     ColSideColors=sample_set_col[rep(1:length(dataset$bulk_list), sapply(dataset$replicate_df,nrow))]
     RowSideColors=sample_set_col[rep(1:length(dataset$bulk_list), sapply(dataset$replicate_df,nrow))]
     #plot
-    options(repr.plot.width=6, repr.plot.height=6)
-    heatmap.2(dataset$bulk_bulk_cor, col=colorRampPalette(col2),lhei=c(1.5,5), 
+    col2=rev(RColorBrewer::brewer.pal(10,"RdBu"))
+    gplots::heatmap.2(dataset$bulk_bulk_cor, col=colorRampPalette(col2),lhei=c(1.5,5), 
               lwid=c(1.5,5), margins = c(15,15), trace="none", density.info="none", dendrogram='none', 
               RowSideColors=RowSideColors,ColSideColors=ColSideColors,
               Colv=F, Rowv=F, notecol="black", main="",key=T,key.title = "correlation")
 }
 
+#' plot the correlation between sc and bulk set mean on TSNE
+#' 
+#' @param dataset dataset object ouput by data_preprocessing
+#' @Exp_Seurat Seurat object with @dr$tsne slot calcualted
+#' @param thresholds threshold for picking the highly similar cells, cells have similarity lower than threshold will be mark gray
+#' @color_contrast positive number for adjusting color contrast, default=1
+#' @plot_sets which bulk sample set to plot
+#' @export
 plot_SC_sampleSet_cor_TSNE=function(dataset,Exp_Seurat,thresholds=NULL,color_contrast=1,plot_sets=NULL){
     if(is.null(dataset$SC_sampleSet_cor)){
         stop("SC_sampleSet_cor not found, run function \"data_preprocessing\" first")
@@ -136,6 +167,14 @@ plot_SC_sampleSet_cor_TSNE=function(dataset,Exp_Seurat,thresholds=NULL,color_con
     }
 }
 
+#' calculate the 2nd correlation
+#'
+#' This function calculate the 2nd correlation, basically force cells that passed threshold to pick side within a bulk set.
+#' 
+#' @param dataset dataset object output by data_preprocessing
+#' @param threshold vector of values that between 0~1
+#' @return an data_set object
+#' @export
 secondary_cor=function(dataset,threshold){
     if(is.null(dataset$SC_sampleSet_cor)){
         stop("SC_sampleSet_cor not found, run function \"data_preprocessing\" first")
@@ -173,6 +212,12 @@ secondary_cor=function(dataset,threshold){
     return(dataset)
 }
 
+#' plot the group annotation on TSNE
+#' 
+#' @param dataset dataset object ouput by secondary_cor
+#' @param Exp_Seurat Seurat object with @dr$tsne slot calcualted
+#' @param plot_sets which bulk sample set to plot
+#' @export
 plot_group_annotation_TSNE=function(dataset,Exp_Seurat,plot_sets=NULL){
     if(is.null(dataset$SC_sampleSet_cor_2nd)){
         stop("SC_sampleSet_cor_2nd not found, run function \"secondary_cor\" first")
@@ -194,6 +239,13 @@ plot_group_annotation_TSNE=function(dataset,Exp_Seurat,plot_sets=NULL){
     }
 }
 
+#' plot the 2nd correlation between sc and bulk sample on TSNE
+#' 
+#' @param dataset dataset object ouput by secondary_cor
+#' @param Exp_Seurat Seurat object with @dr$tsne slot calcualted
+#' @param color_contrast positive number for adjusting color contrast, default=1
+#' @param plot_sets which bulk sample set to plot
+#' @export
 plot_SC_sampleSet_cor_2nd_TSNE=function(dataset,Exp_Seurat,color_contrast=1,plot_sets=NULL){
     if(is.null(dataset$SC_sampleSet_cor_2nd)){
         stop("SC_sampleSet_cor_2nd not found, run function \"data_preprocessing\" first")
@@ -214,12 +266,21 @@ plot_SC_sampleSet_cor_2nd_TSNE=function(dataset,Exp_Seurat,color_contrast=1,plot
     }
 }
 
+#' match bulk annotation with scRNA groups
+#'
+#' For a given meta data label, this function calculate with annotated cell type present in the meta data label, 
+#' and which meta data label is irrelavant for the current dataset. The filtering process ensure that only ident
+#' group that present in at least one of the category will be kept. presence of a group means that more than
+#' filtering_threshold % of a category containing cells from given group. filtering_threshold=NULL means no filtering
+#'
+#' @param dataset dataset object output by secondary_cor
+#' @param Exp_Seurat Seurat object with @metadata
+#' @param relavant_cells A vector cell position id indicating the cells that's relveant for the analysis. 
+#' @param filtering_based_on_category The type of category that filtering will happen on,must be present in Exp_Seurat@meta.data
+#' @param filtering_threshold
+#' @return an data_set object
+#' @export
 metadata_reprocessing=function(dataset,Exp_Seurat,relavant_cells,filtering_based_on_category=NULL,filtering_threshold=0.01){
-    #filtering_based_on_category identify the type of category that filtering will happen on,
-    #filtering_based_on_category must be present in Exp_Seurat@meta.data
-    #the filtering process ensure that only ident group that present in at least one of the category will be kept
-    #presence of a group means that more than filtering_threshold % of a category containing cells from given group.
-    #filtering_threshold=NULL means no filtering
     
     if(sum(!as.numeric(rownames(dataset$sc_mat)) %in% relavant_cells)>0){
         stop("relavant_cells must contain all cells in dataset$sc_mat")
@@ -263,7 +324,15 @@ metadata_reprocessing=function(dataset,Exp_Seurat,relavant_cells,filtering_based
     return(dataset)
 }
 
-
+#' match scRNA clusters with bulk annotation
+#'
+#' label each scRNA cluster in Exp_Seurat@ident as a bulk cell type, if more than min_percent of the
+#' cells from the cluster has certain bulk cell label.
+#'
+#' @param dataset dataset object output by metadata_reprocessing
+#' @param min_percent minimun percentage for a cell cluster being annotated as certain cell type
+#' @return an data_set object
+#' @export
 celltype_annotation_by_cluster=function(dataset,min_percent=0.5){
     #all annotation group pass min_percent will be shown as valid
     cluster_cell_num=table(dataset$sc_metadata$clusters)
@@ -300,6 +369,12 @@ celltype_annotation_by_cluster=function(dataset,min_percent=0.5){
     return(dataset)
 }
 
+#' plot the group annotation one by one on TSNE
+#' 
+#' @param dataset dataset object with sc_mat slot
+#' @param Exp_Seurat Seurat object with @dr$tsne slot and @meta.data
+#' @param tagcol which column of Exp_Seurat@meta.data shoule we plot (column name)
+#' @export
 plot_scMeta=function(dataset,Exp_Seurat,tagcol,main=NULL,addtext=T){
     if(is.null(main)){main=tagcol}
     eval(parse(text=paste0("tag_annotation=dataset$sc_metadata$",tagcol)))
@@ -310,6 +385,12 @@ plot_scMeta=function(dataset,Exp_Seurat,tagcol,main=NULL,addtext=T){
                 tag_cell = as.numeric(rownames(dataset$sc_mat)),Addtext=addtext) #batchs
 }
 
+#' plot the cell cluster one by one on TSNE, using all the single cells rather than cells in dataset@sc_mat
+#' 
+#' @param dataset dataset object with sc_mat slot
+#' @param Exp_Seurat Seurat object with @dr$tsne slot and @ident
+#' @param identMatch a named vector for renaming the clusters, by default it's ataset$cluster_annotation
+#' @export
 plot_scMeta_NotOnlySuperCell_byIdent=function(dataset,Exp_Seurat,identMatch=NULL,main="annotated cluster",addtext=T){
     #identMatch is a named vector with names equal to numerical cluster id (as.numeric(Exp_Seurat@ident))
     if(is.null(identMatch)){
@@ -322,7 +403,13 @@ plot_scMeta_NotOnlySuperCell_byIdent=function(dataset,Exp_Seurat,identMatch=NULL
                 main=main,tag_cell = tagcell,Addtext=addtext) #batchs
 }
 
-
+#' plot the group annotation one by one on TSNE, using all the single cells rather than cells in dataset@sc_mat
+#' 
+#' @param dataset dataset object with sc_mat slot
+#' @param Exp_Seurat Seurat object with @dr$tsne slot and @meta.data
+#' @param by_category which column of Exp_Seurat@meta.data shoule we plot (column name), by default it's "timepoint"
+#' @param identMatch a named vector for renaming the clusters, by default it's ataset$cluster_annotation
+#' @export
 plot_scMeta_NotOnlySuperCell_by_category=function(dataset,Exp_Seurat,identMatch=NULL,by_category="timepoint",main="",addtext=T,rm_small_group=T,tagcell=NULL){
     eval(parse(text=paste0("by_category=Exp_Seurat@meta.data$",by_category)))
     if(is.null(by_category)){
@@ -348,7 +435,3 @@ plot_scMeta_NotOnlySuperCell_by_category=function(dataset,Exp_Seurat,identMatch=
                      main_title=main,tag_cell = tagcell,Addtext=addtext) #batchs
 }
     
-
-#######################################
-
-

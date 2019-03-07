@@ -1,3 +1,4 @@
+#' @export
 WGCNA_plot1=function(datExpr){
     # Choose a set of soft-thresholding powers
     powers = c(c(1:10), seq(from = 12, to=20, by=2))
@@ -23,6 +24,7 @@ WGCNA_plot1=function(datExpr){
     text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
 }
 
+#' @export
 WGCNA_plot2=function(datExpr,softPower){
     k=softConnectivity(datExpr,power=softPower)
     # Plot a histogram of k and a scale free topology plot
@@ -31,6 +33,7 @@ WGCNA_plot2=function(datExpr,softPower){
     scaleFreePlot(k, main="Check scale free topology\n")
 }
 
+#' @export
 WGCNA_dendrogram=function(tag_module){
 
     rbPal <- colorRampPalette(rev(RColorBrewer::brewer.pal(7,"RdBu")))
@@ -48,6 +51,7 @@ WGCNA_dendrogram=function(tag_module){
 }
 
 
+#' @export
 WGCNA_run=function(datExpr,softPower,merge_cutheight=0.1,output_adjacency=F){
     k=softConnectivity(datExpr,power=softPower)
     
@@ -56,7 +60,7 @@ WGCNA_run=function(datExpr,softPower,merge_cutheight=0.1,output_adjacency=F){
     TOM = TOMsimilarity(adjacency,TOMType="signed");
     dissTOM = 1-TOM
     # Call the hierarchical clustering function
-    geneTree = fastcluster:::hclust(as.dist(dissTOM), method = "average");
+    geneTree = fastcluster::hclust(as.dist(dissTOM), method = "average");
     # We like large modules, so we set the minimum module size relatively high:
     # Module identification using dynamic tree cut:
     dynamicMods = cutreeDynamic(dendro = geneTree, distM = dissTOM,deepSplit = 2,pamRespectsDendro = F, minClusterSize = 30)
@@ -110,6 +114,7 @@ WGCNA_run=function(datExpr,softPower,merge_cutheight=0.1,output_adjacency=F){
     return(module_data)
 }
 
+#' @export
 WGCNA_rename_gene_group=function(tag_module,reorder_vec,module_name=NULL){
     #gene_groups
     tag_module$gene_groups=gp_name_replacing(tag_module$gene_groups,1:ncol(tag_module$Module_exp),reorder_vec)
@@ -133,6 +138,7 @@ WGCNA_rename_gene_group=function(tag_module,reorder_vec,module_name=NULL){
     return(tag_module)
 }
 
+#' @export
 Module_intersection=function(module1,module2,lineage_name_1,lineage_name_2){
     total_gene=union(colnames(module1$datExpr),colnames(module2$datExpr))
     gene_group1=module1$gene_groups[match(total_gene,colnames(module1$datExpr))]
@@ -183,6 +189,7 @@ Module_intersection=function(module1,module2,lineage_name_1,lineage_name_2){
                 lineage_name_2=lineage_name_2))
 }
 
+#' @export
 WGCNA_gene_remove=function(tag_module,gene_2_keep){
     tokeep=colnames(tag_module$datExpr) %in% gene_2_keep
     tag_module$gene_groups=tag_module$gene_groups[tokeep]

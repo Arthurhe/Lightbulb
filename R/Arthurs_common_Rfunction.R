@@ -1,5 +1,4 @@
-suppressMessages(require(GenomicRanges))
-
+#' @export
 second_to_humanReadableTime=function(t){
   #change second to a vector of hour,min,second
   h=floor(t/3600)
@@ -11,7 +10,9 @@ second_to_humanReadableTime=function(t){
   return(t)
 }
 
+#' @export
 bedtools_intersect=function(bed1,bed2,overlap=T,count=F,maxgap=0,minoverlap=0,ignore_strand=T,strand_col=6){
+    suppressMessages(require(GenomicRanges))
     if(ignore_strand){
         bed1 <- GRanges(seqnames = bed1[,1],
                         ranges = IRanges(start = bed1[,2],
@@ -40,6 +41,7 @@ bedtools_intersect=function(bed1,bed2,overlap=T,count=F,maxgap=0,minoverlap=0,ig
     return(list(overlap=overlap,count=count))
 }
 
+#' @export
 gp_name_replacing=function(old_group_assignment,old_group_name_to_replace,new_group_name,force_replace=F){
   # replace the group name in old_group_assignment according to old_group_name_to_replace and new_group_name
   # "force_replace = True" allows new_group_name to have the same id as the original group name that is not suppose to be replaced
@@ -56,6 +58,7 @@ gp_name_replacing=function(old_group_assignment,old_group_name_to_replace,new_gr
   return(new_group_assignment)
 }
 
+#' @export
 split_list_by_group=function(id_list,group_assignment,tag_gp=NULL){  
     if(is.null(tag_gp)){
         tag_gp=unique(group_assignment)
@@ -75,11 +78,13 @@ split_list_by_group=function(id_list,group_assignment,tag_gp=NULL){
     return(marker_gene_list)
 }
 
+#' @export
 lsnofun <- function(name = parent.frame()) {
     obj <- ls(name = name)
     obj[!sapply(obj, function(x) is.function(get(x)))]
 }
                 
+#' @export                 
 Subsample_by_group_BreakEven=function(assign_vector,tag_total_num){
     ori_tot=length(assign_vector)
     if(tag_total_num>=ori_tot){
@@ -101,6 +106,7 @@ Subsample_by_group_BreakEven=function(assign_vector,tag_total_num){
     }
 }
                 
+#' @export                 
 Subsample_by_group=function(assign_vector,tag_total_num){
     ori_tot=length(assign_vector)
     if(tag_total_num>=ori_tot){
@@ -116,7 +122,8 @@ Subsample_by_group=function(assign_vector,tag_total_num){
         return(tags)
     }
 }
-
+                
+#' @export 
 Subsample_by_group_and_importance=function(assign_vector,importance_score,tag_total_num){
     #same as subsample by group, but select the top n important target for each group
     ori_tot=length(assign_vector)
@@ -134,10 +141,12 @@ Subsample_by_group_and_importance=function(assign_vector,importance_score,tag_to
     }
 }                
                 
+#' @export                 
 which.colmax=function(input_mat){
     return(apply(input_mat,2,function(x){which.max(x)}))
 }
-
+                
+#' @export 
 matrix_Aggregate=function(mat,rowby,colby,function_to_use){
   #function_to_use: mean, median, max, min, etc
   rowby=as.numeric(factor(rowby))
@@ -157,36 +166,44 @@ matrix_Aggregate=function(mat,rowby,colby,function_to_use){
   return(dt)
 }
                 
+#' @export                 
 firstup <- function(x) {
     x=tolower(x)
    substr(x, 1, 1) <- toupper(substr(x, 1, 1))
     return(x)
 }
-
+                
+#' @export 
 colSds=function(x){
     return(matrixStats::colSds(as.matrix(x)))
 }
                 
+#' @export                 
 rowSds=function(x){
     return(matrixStats::rowSds(as.matrix(x)))
 }
                 
+#' @export               
 colMaxs=function(x){
     return(matrixStats::colMaxs(as.matrix(x)))
 }
                 
+#' @export                 
 rowMaxs=function(x){
     return(matrixStats::rowMaxs(as.matrix(x)))
 }
                 
+#' @export                 
 colMins=function(x){
     return(matrixStats::colMins(as.matrix(x)))
 }
                 
+#' @export                 
 rowMins=function(x){
     return(matrixStats::rowMins(as.matrix(x)))
-} 
+}
                 
+#' @export                 
 reassign_cluster=function(SNN,cluster_annotation,unwannted_cluster){ #SNN can be any similarity matrix that the higher the score the higher similarity (lower distance)
     unassigned_cells=which(cluster_annotation %in% unwannted_cluster)
     assigned_cells=which(!cluster_annotation %in% unwannted_cluster)
@@ -224,13 +241,98 @@ reassign_cluster=function(SNN,cluster_annotation,unwannted_cluster){ #SNN can be
     }
     return(cluster_annotation)
 }
+                
+#' @export
+DEG_wilcox=function(group1,group2,delta_threshold=NULL,p_threshold=NULL,p_adjust_method='bonferroni'){
+  #DEG for UMI or TPM (value >0)
+  if(sum(colnames(group1)!=colnames(group2))>0){
+    warning("gene names are different between group1 and group2")
+  }
+  p=rep(1,ncol(group1))
+  g1_mean=colMeans(group1)
+  g2_mean=colMeans(group2)
+  mean_dif=g1_mean-g2_mean
+  tag=which(mean_dif!=0)
+  p[tag]=sapply(tag,function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
+  #for fold change 0 sum not allowed
 
-firstup <- function(x) {
-    x=tolower(x)
-   substr(x, 1, 1) <- toupper(substr(x, 1, 1))
-    return(x)
+  p=p.adjust(p,method=p_adjust_method)
+  #check threshold
+  if(!is.null(p_threshold) & !is.null(delta_threshold)){
+    tag=p<p_threshold & abs(mean_dif) > abs(delta_threshold)
+    o=data.frame(group1_mean=g1_mean,group2_mean=g2_mean,log10pval=log10(p),delta=mean_dif,DE=tag,stringsAsFactors=F)
+  }else{
+    o=data.frame(group1_mean=g1_mean,group2_mean=g2_mean,log10pval=log10(p),delta=mean_dif,stringsAsFactors=F)
+  }
+  rownames(o)=colnames(group1)
+  return(o)
+}                
+                
+
+#' @export                
+DEG_wilcox_UMI=function(group1,group2,p_threshold=NULL,log2fold_threshold=NULL,p_adjust_method='fdr'){ #it was bonferroni
+  #DEG for UMI or TPM (value >0)
+  if(sum(colnames(group1)!=colnames(group2))>0){
+    warning("gene names are different between group1 and group2")
+  }
+  p=rep(1,ncol(group1))
+  foldchange=rep(1,ncol(group1))
+  g1_mean=colMeans(group1)
+  g2_mean=colMeans(group2)
+  g1_pos=g1_mean>0
+  g2_pos=g2_mean>0
+  tag=which(g1_pos | g2_pos)
+  p[tag]=sapply(tag,function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
+  #for fold change 0 sum not allowed
+  tag=which(g1_pos | g2_pos)
+  foldchange[tag]=sapply(tag,function(x){log2((g1_mean[x]+1)/(g2_mean[x]+1))})
+  foldchange[which(g1_pos>g2_pos)]=Inf
+  foldchange[which(g1_pos<g2_pos)]=-Inf
+  
+  p=p.adjust(p,method=p_adjust_method)
+  #check threshold
+  if(!is.null(p_threshold) & !is.null(log2fold_threshold)){
+    tag=p<p_threshold & abs(foldchange) > abs(log2fold_threshold)
+    o=data.frame(group1_mean=g1_mean,group2_mean=g2_mean,log10pval=log10(p),log2fold=foldchange,DE=tag,stringsAsFactors=F)
+  }else{
+    o=data.frame(group1_mean=g1_mean,group2_mean=g2_mean,log10pval=log10(p),log2fold=foldchange,stringsAsFactors=F)
+  }
+  rownames(o)=colnames(group1)
+  return(o)
 }
                 
-which.colmax=function(input_mat){
-    return(apply(input_mat,2,function(x){which.max(x)}))
+#' @export
+write_id_by_group=function(id_list,group_assignment,outprefix){    
+    tag_gp=unique(group_assignment)
+    tag_gp=tag_gp[gtools::mixedorder(tag_gp)]   
+    marker_gene_list=c()
+    for(i in 1:length(tag_gp)){
+        marker_gene_list[[i]]=id_list[group_assignment==tag_gp[i]]
+    }
+    #marker_gene_list
+    write(paste0(outprefix," seperated by group:"),file=paste0(outprefix,".txt"))
+    for(i in 1:length(marker_gene_list)){
+        write(paste0(tag_gp[i],":"),file=paste0(outprefix,".txt"), append=T)
+        write(marker_gene_list[[i]],file=paste0(outprefix,".txt"), append=T,ncolumns=100000)
+        write("",file=paste0(outprefix,".txt"), append=T)
+    }
+}
+
+#' @export                
+cross_combining=function(string1,string2){
+    o=rep("",length(string1)*length(string2))
+    k=0
+    for(i in 1:length(string1)){
+        for(j in 1:length(string2)){
+            k=k+1
+            o[k]=paste0(string1[i],"_",string2[j])
+        } 
+    }
+    return(o)
+}
+                
+#' @export
+dropcol <- function(df, drop) {
+  df <- df [, ! names(df) %in% drop, drop = FALSE]
+  return(df)
 }

@@ -1,21 +1,24 @@
 Package: Lightbulb
-Title: What the Package Does (one line, title case)
+Title: single cell RNA-seq analysis suite/pipeline
 Version: 0.0.0.9000
-Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
+Authors@R: person("Zhaoren", "He", email = "zhaoren.arthur.he@gmail.com", role = c("aut", "cre"))
 Description: What the package does (one paragraph).
 Depends: R (>= 3.4.1),
-         data.table
-License: What license is it under?
+         data.table,
+         matrixStats,
+         Matrix,
+         gplots,
+         ggplot2,
+         data.table,
+         Seurat
+License: GPL
 Encoding: UTF-8
 LazyData: true
-Imports: Rtsne,
-    matrixStats,
-    Matrix,
-    proxy,
-    ggplot2,
-    data.table,
-    fastcluster,
-    optrees,
-    vegan,
-    Seurat
+Imports: mixtools,
+         fastcluster,
+         RANN,
+         igraph,
+         GenomicRanges,
+         WGCNA,
+         rsvd
 RoxygenNote: 6.1.0

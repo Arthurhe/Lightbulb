@@ -1,3 +1,4 @@
+#' @export
 plotByGroup=function(Exp_Seurat,
                      Group_assignment, #must match the cells order in Exp_Seurat@dr
                      Group_type=NULL, #provide the order of Group_type
@@ -153,6 +154,7 @@ plotByGroup=function(Exp_Seurat,
     }
 }
 
+#' @export
 plotByGroup_1by1=function(Exp_Seurat,
                           Group_assignment,
                           Group_type=NULL, #the group ordering
@@ -192,6 +194,7 @@ plotByGroup_1by1=function(Exp_Seurat,
     }
 }
 
+#' @export
 plotByGroupA_byB=function(Exp_Seurat,
                           Group_assignment_A,
                           Group_assignment_B,
@@ -240,7 +243,7 @@ plotByGroupA_byB=function(Exp_Seurat,
     }
 }
 
-
+#' @export
 plotByScore=function(Exp_Seurat,
                      Score_assignment,
                      random_order=T,

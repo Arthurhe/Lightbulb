@@ -1,6 +1,6 @@
 # Lightbulb
 
-An R single cell RNA-seq analysis pipeline/suite.
+An R single cell RNA-seq analysis pipeline/suite. Plz check Examples for how to use.
 
 Components:
 
