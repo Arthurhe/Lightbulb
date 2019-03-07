@@ -11,7 +11,7 @@ Plz check Examples for how to use.
 
 ```R  
 if (!require("devtools")) install.packages("devtools")
-devtools::install\_github("Arthurhe/Lightbulb")
+devtools::install_github("Arthurhe/Lightbulb")
 ```
 
 ### Components:
