@@ -5,11 +5,7 @@ Authors@R: person("Zhaoren", "He", email = "zhaoren.arthur.he@gmail.com", role =
 Description: What the package does (one paragraph).
 Depends: R (>= 3.4.1),
          data.table,
-         matrixStats,
          Matrix,
-         gplots,
-         ggplot2,
-         data.table,
          Seurat
 License: GPL
 Encoding: UTF-8
@@ -20,5 +16,7 @@ Imports: mixtools,
          igraph,
          GenomicRanges,
          WGCNA,
+         matrixStats,
+         gplots,
          rsvd
 RoxygenNote: 6.1.0
