@@ -1,12 +1,12 @@
 # Lightbulb
-___
+
 An R single cell RNA-seq analysis pipeline/suite. It focuses on the following utilities:  
 1. creating super cells from single cell data to fix drop out and noise of scRNA-seq
 2. Annotating single cell data according bulk RNA-seq  
 3. Comparing temporal scRNA-seq data of different lineage/time-line, identify the key genes  
   
 ## Example
-___
+
 Example jupyter notebooks:
 https://github.com/Arthurhe/Lightbulb/tree/master/Examples
 
