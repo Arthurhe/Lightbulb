@@ -227,9 +227,13 @@ combo_identification=function(exp_table, label_list, p_threshold=0.05, log2fold_
 Super_cell_creation=function(sc_object,k_filter=NULL,k_merge=100,n=5000,tag_cell=NULL,verbose=1,sampling_ref=NULL){
 
     if(typeof(sc_object)=="S4"){
-        pca_out=sc_object@dr$pca@cell.embeddings
-        sc_object=t(as.matrix(sc_object@scale.data))
-        message("Seurat object detected as input")
+        if(summary(sc_object)[2]=="seurat"){
+            pca_out=sc_object@dr$pca@cell.embeddings
+            sc_object=t(as.matrix(sc_object@scale.data))
+            message("Seurat object detected as input")
+        }else{
+            stop("invalid sc_object")
+        }
     }else{
         message("Assuming input is cell-gene matrix")
         tagMat_filtered = as.matrix( sc_object[,colSums(as.matrix(sc_object) > 0) > ceiling(nrow(sc_object) / 100) ] )
