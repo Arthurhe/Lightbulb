@@ -7,7 +7,7 @@ An R single cell RNA-seq analysis pipeline/suite. It focuses on the following ut
   
 ## Example
 
-Example jupyter notebooks:
+Example jupyter notebooks / markdown files:
 https://github.com/Arthurhe/Lightbulb/tree/master/Examples
 
 Example data:
