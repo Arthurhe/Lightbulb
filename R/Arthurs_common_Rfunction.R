@@ -64,7 +64,7 @@ split_list_by_group=function(id_list,group_assignment,tag_gp=NULL){
         tag_gp=unique(group_assignment)
         tag_gp=tag_gp[gtools::mixedorder(tag_gp)] 
     }
-    marker_gene_list=c()
+    marker_gene_list=list()
     for(i in 1:length(tag_gp)){
         tag=group_assignment==tag_gp[i]
         if(sum(tag)>0){
@@ -335,4 +335,18 @@ cross_combining=function(string1,string2){
 dropcol <- function(df, drop) {
   df <- df [, ! names(df) %in% drop, drop = FALSE]
   return(df)
+}
+                
+#' @export
+list.dirs <- function(path=".", pattern=NULL, all.dirs=FALSE,
+  full.names=FALSE, ignore.case=FALSE) {
+  # use full.names=TRUE to pass to file.info
+  all <- list.files(path, pattern, all.dirs,
+           full.names=TRUE, recursive=FALSE, ignore.case)
+  dirs <- all[file.info(all)$isdir]
+  # determine whether to return full names or just dir names
+  if(isTRUE(full.names))
+    return(dirs)
+  else
+    return(basename(dirs))
 }
