@@ -210,22 +210,24 @@ combo_identification=function(exp_table, label_list, p_threshold=0.05, log2fold_
     return(DE_table)
 }
 
-#' Create super cells from Seurat object or a matrix
+#' Create super-cells from Seurat object or a matrix
 #' 
-#' input a seurat object or single cell matrix, get randomly selected n cells as super cell seed. For each seed,
+#' input a seurat object or single cell matrix, get randomly selected n cells as super-cell seed. For each seed,
 #' merge k_merge nearest neighbor cells to the seed cell and calculate average expression.
 #'
 #' @param sc_object sc matrix with row in cells, col in genes. Or Seurat object, if so Seurat@scale.data will be used for calculation.
 #' @param k_filter remove cells that have no mutual nearest neighbor with k=k_filter, default not removing any cells.
-#' @param k_merge merge k=k_merge nearest neighbor to create each super cell.
-#' @param n number of super cell to pick, will be ignored if tag_cell!=NULL.
-#' @param tag_cell a vector of cell position for super cell centers.
+#' @param k_merge merge k=k_merge nearest neighbor to create each super-cell.
+#' @param n number of super-cell to pick, will be ignored if tag_cell!=NULL.
+#' @param tag_cell a vector of cell position for super-cell centers.
 #' @param verbose print time consumption to screen or not (0 not print, 1 print important ones, 2 print all).
-#' @param sampling_ref a vector group annotation. The random selection of n super cell centers will try to keep the ratio between group the same.
-#' @return an super cell matrix, each row is a cell, eacho col is a gene. row names is the position of the super cell center from input (row number in sc matrix, col number in Seurat@scale.data).
+#' @param sampling_ref a vector group annotation. The random selection of n super-cell centers will try to keep the ratio between group the same.
+#' @param seed a integer for set.seed
+#' @return an super-cell matrix, each row is a cell, eacho col is a gene. row names is the position of the super-cell center from input (row number in sc matrix, col number in Seurat@scale.data).
 #' @export
-Super_cell_creation=function(sc_object,k_filter=NULL,k_merge=100,n=5000,tag_cell=NULL,verbose=1,sampling_ref=NULL){
-
+Super_cell_creation=function(sc_object,k_filter=NULL,k_merge=100,n=5000,tag_cell=NULL,verbose=1,sampling_ref=NULL,seed=123){
+    
+    set.seed(seed)
     if(typeof(sc_object)=="S4"){
         if(summary(sc_object)[2]=="seurat"){
             pca_out=sc_object@dr$pca@cell.embeddings

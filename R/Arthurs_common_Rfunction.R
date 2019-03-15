@@ -241,9 +241,10 @@ reassign_cluster=function(SNN,cluster_annotation,unwannted_cluster){ #SNN can be
     }
     return(cluster_annotation)
 }
-                
+
+           
 #' @export
-DEG_wilcox=function(group1,group2,delta_threshold=NULL,p_threshold=NULL,p_adjust_method='bonferroni'){
+DEG=function(group1,group2,delta_threshold=NULL,p_threshold=NULL,p_adjust_method='bonferroni',test.method=c("wilcox","t")){
   #DEG for UMI or TPM (value >0)
   if(sum(colnames(group1)!=colnames(group2))>0){
     warning("gene names are different between group1 and group2")
@@ -253,10 +254,18 @@ DEG_wilcox=function(group1,group2,delta_threshold=NULL,p_threshold=NULL,p_adjust
   g2_mean=colMeans(group2)
   mean_dif=g1_mean-g2_mean
   tag=which(mean_dif!=0)
-  p[tag]=sapply(tag,function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
+    
+  if(test.method=="wilcox"){
+      p[tag]=sapply(tag,function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
+  }
+  if(test.method=="t"){
+      p[tag]=sapply(tag,function(x){t.test(group1[,x], group2[,x],exact=F)$p.value})
+  }
+    
   #for fold change 0 sum not allowed
 
-  p=p.adjust(p,method=p_adjust_method)
+  if(!is.null(p_adjust_method)){p=p.adjust(p,method=p_adjust_method)}
+    
   #check threshold
   if(!is.null(p_threshold) & !is.null(delta_threshold)){
     tag=p<p_threshold & abs(mean_dif) > abs(delta_threshold)
@@ -270,7 +279,7 @@ DEG_wilcox=function(group1,group2,delta_threshold=NULL,p_threshold=NULL,p_adjust
                 
 
 #' @export                
-DEG_wilcox_UMI=function(group1,group2,p_threshold=NULL,log2fold_threshold=NULL,p_adjust_method='fdr'){ #it was bonferroni
+DEG_UMI=function(group1,group2,p_threshold=NULL,log2fold_threshold=NULL,p_adjust_method='fdr',test.method=c("wilcox","t")){ #it was bonferroni
   #DEG for UMI or TPM (value >0)
   if(sum(colnames(group1)!=colnames(group2))>0){
     warning("gene names are different between group1 and group2")
@@ -282,14 +291,22 @@ DEG_wilcox_UMI=function(group1,group2,p_threshold=NULL,log2fold_threshold=NULL,p
   g1_pos=g1_mean>0
   g2_pos=g2_mean>0
   tag=which(g1_pos | g2_pos)
-  p[tag]=sapply(tag,function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
+    
+  if(test.method=="wilcox"){
+      p[tag]=sapply(tag,function(x){wilcox.test(group1[,x], group2[,x],exact=F)$p.value})
+  }
+  if(test.method=="t"){
+      p[tag]=sapply(tag,function(x){t.test(group1[,x], group2[,x],exact=F)$p.value})
+  }
+  
   #for fold change 0 sum not allowed
   tag=which(g1_pos | g2_pos)
   foldchange[tag]=sapply(tag,function(x){log2((g1_mean[x]+1)/(g2_mean[x]+1))})
   foldchange[which(g1_pos>g2_pos)]=Inf
   foldchange[which(g1_pos<g2_pos)]=-Inf
   
-  p=p.adjust(p,method=p_adjust_method)
+  if(!is.null(p_adjust_method)){p=p.adjust(p,method=p_adjust_method)}
+    
   #check threshold
   if(!is.null(p_threshold) & !is.null(log2fold_threshold)){
     tag=p<p_threshold & abs(foldchange) > abs(log2fold_threshold)
