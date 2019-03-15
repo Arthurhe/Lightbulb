@@ -2,30 +2,33 @@
 % Please edit documentation in R/sc_functions.R
 \name{Super_cell_creation}
 \alias{Super_cell_creation}
-\title{Create super cells from Seurat object or a matrix}
+\title{Create super-cells from Seurat object or a matrix}
 \usage{
 Super_cell_creation(sc_object, k_filter = NULL, k_merge = 100,
-  n = 5000, tag_cell = NULL, verbose = 1, sampling_ref = NULL)
+  n = 5000, tag_cell = NULL, verbose = 1, sampling_ref = NULL,
+  seed = 123)
 }
 \arguments{
 \item{sc_object}{sc matrix with row in cells, col in genes. Or Seurat object, if so Seurat@scale.data will be used for calculation.}
 
 \item{k_filter}{remove cells that have no mutual nearest neighbor with k=k_filter, default not removing any cells.}
 
-\item{k_merge}{merge k=k_merge nearest neighbor to create each super cell.}
+\item{k_merge}{merge k=k_merge nearest neighbor to create each super-cell.}
 
-\item{n}{number of super cell to pick, will be ignored if tag_cell!=NULL.}
+\item{n}{number of super-cell to pick, will be ignored if tag_cell!=NULL.}
 
-\item{tag_cell}{a vector of cell position for super cell centers.}
+\item{tag_cell}{a vector of cell position for super-cell centers.}
 
 \item{verbose}{print time consumption to screen or not (0 not print, 1 print important ones, 2 print all).}
 
-\item{sampling_ref}{a vector group annotation. The random selection of n super cell centers will try to keep the ratio between group the same.}
+\item{sampling_ref}{a vector group annotation. The random selection of n super-cell centers will try to keep the ratio between group the same.}
+
+\item{seed}{a integer for set.seed}
 }
 \value{
-an super cell matrix, each row is a cell, eacho col is a gene. row names is the position of the super cell center from input (row number in sc matrix, col number in Seurat@scale.data).
+an super-cell matrix, each row is a cell, eacho col is a gene. row names is the position of the super-cell center from input (row number in sc matrix, col number in Seurat@scale.data).
 }
 \description{
-input a seurat object or single cell matrix, get randomly selected n cells as super cell seed. For each seed,
+input a seurat object or single cell matrix, get randomly selected n cells as super-cell seed. For each seed,
 merge k_merge nearest neighbor cells to the seed cell and calculate average expression.
 }
