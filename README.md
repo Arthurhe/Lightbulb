@@ -34,7 +34,7 @@ Depends:
 R (3.4.4),
 data.table(1.12.0),
 Matrix(1.2-14),
-Seurat(2.3.4),
+Seurat(2.3.4), #currently the code won't work for Seurat V3+ because seurat has change it's data structure 
 ```
 
 Imports:

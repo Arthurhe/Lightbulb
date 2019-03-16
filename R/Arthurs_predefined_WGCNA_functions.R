@@ -3,7 +3,7 @@ WGCNA_plot1=function(datExpr){
     # Choose a set of soft-thresholding powers
     powers = c(c(1:10), seq(from = 12, to=20, by=2))
     # Call the network topology analysis function
-    sft = pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
+    sft = WGCNA::pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
 
     #plottting shit
     require(repr)
@@ -26,11 +26,11 @@ WGCNA_plot1=function(datExpr){
 
 #' @export
 WGCNA_plot2=function(datExpr,softPower){
-    k=softConnectivity(datExpr,power=softPower)
+    k=WGCNA::softConnectivity(datExpr,power=softPower)
     # Plot a histogram of k and a scale free topology plot
     par(mfrow = c(1,2));
     hist(k)
-    scaleFreePlot(k, main="Check scale free topology\n")
+    WGCNA::scaleFreePlot(k, main="Check scale free topology\n")
 }
 
 #' @export
@@ -46,33 +46,33 @@ WGCNA_dendrogram=function(tag_module){
                    tag_module$gene_gp_col[tag_module$gene_groups],
                    topKcol)
     
-    plotDendroAndColors(tag_module$geneTree, coltouse,c("Dynamic tree cut", "Merged dynamic","Most connected gene hub"),
-                    dendroLabels = FALSE, hang = 0.03,addGuide = TRUE, guideHang = 0.05)
+    WGCNA::plotDendroAndColors(tag_module$geneTree, coltouse,c("Dynamic tree cut", "Merged dynamic","Most connected gene hub"),
+                               dendroLabels = FALSE, hang = 0.03,addGuide = TRUE, guideHang = 0.05)
 }
 
 
 #' @export
 WGCNA_run=function(datExpr,softPower,merge_cutheight=0.1,output_adjacency=F){
-    k=softConnectivity(datExpr,power=softPower)
+    k=WGCNA::softConnectivity(datExpr,power=softPower)
     
-    adjacency = adjacency(datExpr, power = softPower,type="signed");
+    adjacency = WGCNA::adjacency(datExpr, power = softPower,type="signed");
     # Turn adjacency into topological overlap
-    TOM = TOMsimilarity(adjacency,TOMType="signed");
+    TOM = WGCNA::TOMsimilarity(adjacency,TOMType="signed");
     dissTOM = 1-TOM
     # Call the hierarchical clustering function
     geneTree = fastcluster::hclust(as.dist(dissTOM), method = "average");
     # We like large modules, so we set the minimum module size relatively high:
     # Module identification using dynamic tree cut:
-    dynamicMods = cutreeDynamic(dendro = geneTree, distM = dissTOM,deepSplit = 2,pamRespectsDendro = F, minClusterSize = 30)
+    dynamicMods = WGCNA::cutreeDynamic(dendro = geneTree, distM = dissTOM,deepSplit = 2,pamRespectsDendro = F, minClusterSize = 30)
     # Calculate eigengenes
-    MEList = moduleEigengenes(datExpr, colors = dynamicMods)
+    MEList = WGCNA::moduleEigengenes(datExpr, colors = dynamicMods)
     # Calculate dissimilarity of module eigengenes
     MEDiss = 1-cor(MEList$eigengenes);
     # Cluster module eigengenes
     METree = hclust(as.dist(MEDiss), method = "average");
 
     # Call an automatic merging function
-    merge = mergeCloseModules(datExpr, dynamicMods, cutHeight = merge_cutheight, verbose = 0)
+    merge = WGCNA::mergeCloseModules(datExpr, dynamicMods, cutHeight = merge_cutheight, verbose = 0)
     merge$newMEs=merge$newMEs[,colnames(merge$newMEs)!="ME0"]
     #rename the merged modules
     old_id=as.numeric(substring(colnames(merge$newMEs),"3"))
