@@ -31,23 +31,23 @@ devtools::install_github("Arthurhe/Lightbulb")
 ### Dependency
 Depends:
 ```R 
-R (3.4.4),
-data.table(1.12.0),
-Matrix(1.2-14),
-Seurat(2.3.4), #currently the code won't work for Seurat V3+ because seurat has change it's data structure 
+R (>= 3.4.4),
+data.table (>= 1.12.0),
+Matrix (>= 1.2-14),
+Seurat (2.3.4), #currently the code is not compatible with Seurat V3+ because of data structure
 ```
 
 Imports:
 ```R
-matrixStats,
-gplots,
-mixtools,
-fastcluster,
-RANN(2.6.1),
-igraph(1.2.4),
-GenomicRanges,
-WGCNA(1.66),
-rsvd
+matrixStats (>= 0.54.0),
+gplots (>= 3.0.1.1),
+mixtools (>= 1.1.0),
+fastcluster (>= 1.1.25),
+RANN (>= 2.6.1),
+igraph (>= 1.2.4),
+GenomicRanges (>= 1.26.4),
+WGCNA (>= 1.66),
+rsvd (>= 1.0.0)
 ```
   
 
