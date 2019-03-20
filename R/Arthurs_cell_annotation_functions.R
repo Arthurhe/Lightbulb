@@ -33,7 +33,7 @@ bulk_list_normalize=function(bulk_list){
 #' process the list of bulk samples, the single cell matrix into a single object for downstream analysis
 #'
 #' This function loads the bulk_list object output by "bulk_list_normalize", a single cell matrix and a gene id vector
-#' each row of the single cell matrix is a row, and each column is a gene. 
+#' each row of the single cell matrix is a cell, and each column is a gene. 
 #' The gene id vector must be identical to the gene order of the single cell matrix, and the gene order of bulk_list
 #' 
 #' @param bulk_list input bulk list

@@ -129,10 +129,10 @@ bulk_list=bulk_list_normalize(bulk_list)
 
 
 ```R
-#select cells for mapping in Seurat object
+#We are only interested in the cells from spleen in the single cell data. Select cells for mapping in Seurat object
 tag_cell_for_all_cells=which(Exp_Seurat@meta.data$tissue == "Spleen")
 
-#select super cells center in all candidate cells
+#Select super cells that have the spleen label
 tag_cell=as.numeric(rownames(super_cell_matrix)) %in% tag_cell_for_all_cells
 
 #create the super cell matrix

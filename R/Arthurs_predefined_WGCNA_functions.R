@@ -63,7 +63,7 @@ WGCNA_run=function(datExpr,softPower,merge_cutheight=0.1,output_adjacency=F){
     geneTree = fastcluster::hclust(as.dist(dissTOM), method = "average");
     # We like large modules, so we set the minimum module size relatively high:
     # Module identification using dynamic tree cut:
-    dynamicMods = WGCNA::cutreeDynamic(dendro = geneTree, distM = dissTOM,deepSplit = 2,pamRespectsDendro = F, minClusterSize = 30)
+    dynamicMods = dynamicTreeCut::cutreeDynamic(dendro = geneTree, distM = dissTOM,deepSplit = 2,pamRespectsDendro = F, minClusterSize = 30)
     # Calculate eigengenes
     MEList = WGCNA::moduleEigengenes(datExpr, colors = dynamicMods)
     # Calculate dissimilarity of module eigengenes
@@ -132,6 +132,13 @@ WGCNA_rename_gene_group=function(tag_module,reorder_vec,module_name=NULL){
         colnames(tag_module$Module_exp)=paste0("module_",reorder_vec)
         tag_module$Module_exp=tag_module$Module_exp[,order(reorder_vec,decreasing = F)]
     }
+    
+    #change color
+    if(max(tag_module$gene_groups)<=9){
+        tag_module$gene_gp_col=RColorBrewer::brewer.pal(max(3,max(tag_module$gene_groups)),"Set1")
+    }else{
+        gtag_module$ene_gp_col=colorRampPalette(RColorBrewer::brewer.pal(9,"Set1"))(max(tag_module$gene_groups))
+    }
 
     #module_name
     tag_module$module_name=module_name
@@ -188,6 +195,28 @@ Module_intersection=function(module1,module2,lineage_name_1,lineage_name_2){
                 lineage_name_1=lineage_name_1,
                 lineage_name_2=lineage_name_2))
 }
+
+#' @export
+Module_intersection_all=function(module1,module2,moduleAll,lineage_name_1,lineage_name_2){
+    module_cross_tbl=list()
+    for(i in 1:length(moduleAll$gene_gp_col)){
+        tag_gene=colnames(moduleAll$datExpr)[ moduleAll$gene_groups == i ]
+
+        gene_group1=factor(module1$gene_groups[match(tag_gene,colnames(module1$datExpr))],levels=1:max(module1$gene_groups))
+        gene_group2=factor(module2$gene_groups[match(tag_gene,colnames(module2$datExpr))],levels=1:max(module2$gene_groups))
+
+        module_cross_tbl[[i]]=table(gene_group1,gene_group2,useNA="ifany")
+        not_na_cols=which(!is.na(colnames(module_cross_tbl[[i]])))
+        not_na_rows=which(!is.na(rownames(module_cross_tbl[[i]])))
+
+        rownames(module_cross_tbl[[i]])[not_na_rows]=paste(lineage_name_1,"pattern",rownames(module_cross_tbl[[i]])[not_na_rows])
+        colnames(module_cross_tbl[[i]])[not_na_cols]=paste(lineage_name_2,"pattern",colnames(module_cross_tbl[[i]])[not_na_cols])
+        rownames(module_cross_tbl[[i]])[is.na(rownames(module_cross_tbl[[i]]))]=paste("not expressed in",lineage_name_1)
+        colnames(module_cross_tbl[[i]])[is.na(colnames(module_cross_tbl[[i]]))]=paste("not expressed in",lineage_name_2)
+    }
+    return(module_cross_tbl)
+}
+
 
 #' @export
 WGCNA_gene_remove=function(tag_module,gene_2_keep){
