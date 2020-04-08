@@ -163,7 +163,11 @@ plot_SC_sampleSet_cor_TSNE=function(dataset,Exp_Seurat,thresholds=NULL,color_con
         }else{
             tagc=as.numeric(rownames(dataset$sc_mat))
         }
-        plotByScore(Exp_Seurat, Score_assignment=score, main=colnames(dataset$SC_sampleSet_cor)[i], tag_cell = tagc, bkg_cell=as.numeric(rownames(dataset$sc_mat)), colorSD=color_contrast) #batchs
+        Score_assignment=rep(0,nrow(Exp_Seurat@meta.data))
+        Score_assignment[tagc]=score
+        plotByScore(Exp_Seurat, Score_assignment=Score_assignment, main=colnames(dataset$SC_sampleSet_cor)[i],
+                    must_plot_cell = tagc, dont_plot_cell=setdiff(1:nrow(Exp_Seurat@meta.data),as.numeric(rownames(dataset$sc_mat))),
+                    colorSD=color_contrast) #batchs
     }
 }
 
@@ -218,7 +222,7 @@ secondary_cor=function(dataset,threshold){
 #' @param Exp_Seurat Seurat object with @dr$tsne slot calcualted
 #' @param plot_sets which bulk sample set to plot
 #' @export
-plot_group_annotation_TSNE=function(dataset,Exp_Seurat,plot_sets=NULL){
+plot_group_annotation_TSNE=function(dataset,Exp_Seurat,plot_sets=NULL,tagcol=NULL){
     if(is.null(dataset$SC_sampleSet_cor_2nd)){
         stop("SC_sampleSet_cor_2nd not found, run function \"secondary_cor\" first")
     }
@@ -226,16 +230,23 @@ plot_group_annotation_TSNE=function(dataset,Exp_Seurat,plot_sets=NULL){
     if(is.null(plot_sets)){
         plot_sets=1:ncol(dataset$SC_sampleSet_cor)
     }
+    
+    if(is.null(tagcol)){
+        tagcol = list(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)
+        for(i in plot_sets){tagcol[[i]]=NULL}
+    }
+    
     gp_assign=dataset$celltype_assignment
     gp_assign[is.na(gp_assign)]="not_in_group"
-    for(i in 1:ncol(dataset$celltype_assignment)){
+    for(i in plot_sets){
         gp_assign_expanded=rep("",nrow(Exp_Seurat@meta.data))
         gp_assign_expanded[as.numeric(rownames(dataset$sc_mat))]=gp_assign[,i]
         plotByGroup(Exp_Seurat,Group_assignment=gp_assign_expanded,
                     main=colnames(dataset$celltype_assignment)[i],
                     Group_type=names(dataset$bulk_list[[i]]),
                     backGroundGroup="not_in_group",
-                    tag_cell = as.numeric(rownames(dataset$sc_mat))) #batchs
+                    tag_cell = as.numeric(rownames(dataset$sc_mat)),
+                    tagcol=tagcol[[i]]) #batchs
     }
 }
 
@@ -259,8 +270,12 @@ plot_SC_sampleSet_cor_2nd_TSNE=function(dataset,Exp_Seurat,color_contrast=1,plot
         tag_cells=as.numeric(rownames(dataset$SC_sampleSet_cor_2nd[[i]]))
         for(j in 1:ncol(dataset$SC_sampleSet_cor_2nd[[i]])){
             score=dataset$SC_sampleSet_cor_2nd[[i]][,j]
-            plot_name=paste0(names(dataset$SC_sampleSet_cor_2nd)[i],":",colnames(dataset$SC_sampleSet_cor_2nd[[i]])[j])
-            plotByScore(Exp_Seurat, Score_assignment=score, main=plot_name, tag_cell = tag_cells,colorCenter=0, bkg_cell=as.numeric(rownames(dataset$sc_mat)), colorSD=color_contrast) #batchs
+            plot_name=paste0(names(dataset$SC_sampleSet_cor_2nd)[i],":",colnames(dataset$SC_sampleSet_cor_2nd[[i]])[j])            
+            Score_assignment=rep(0,nrow(Exp_Seurat@meta.data))
+            Score_assignment[tag_cells]=score
+            plotByScore(Exp_Seurat, Score_assignment=Score_assignment, main=plot_name, colorCenter=0, 
+                        must_plot_cell = tag_cells, dont_plot_cell=setdiff(1:nrow(Exp_Seurat@meta.data),as.numeric(rownames(dataset$sc_mat))), 
+                        colorSD=color_contrast) #batchs
         }
 
     }

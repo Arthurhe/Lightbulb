@@ -5,7 +5,7 @@ second_to_humanReadableTime=function(t){
   t=t-h*3600
   m=floor(t/60)
   t=t-m*60
-  s=t
+  s=round(t,2)
   t=c(h,m,s)
   return(t)
 }
@@ -45,6 +45,7 @@ bedtools_intersect=function(bed1,bed2,overlap=T,count=F,maxgap=0,minoverlap=0,ig
 gp_name_replacing=function(old_group_assignment,old_group_name_to_replace,new_group_name,force_replace=F){
   # replace the group name in old_group_assignment according to old_group_name_to_replace and new_group_name
   # "force_replace = True" allows new_group_name to have the same id as the original group name that is not suppose to be replaced
+    if(length(old_group_name_to_replace)!=length(new_group_name)){stop("gp names length not identical")}
   all_old_gp_name=unique(old_group_assignment)
   if(!force_replace){
     keeping_group_name=setdiff(all_old_gp_name,old_group_name_to_replace)
@@ -149,20 +150,24 @@ which.colmax=function(input_mat){
 #' @export 
 matrix_Aggregate=function(mat,rowby,colby,function_to_use){
   #function_to_use: mean, median, max, min, etc
-  rowby=as.numeric(factor(rowby))
-  colby=as.numeric(factor(colby))
+  rowfactor=factor(rowby)  
+  colfactor=factor(colby)
+  rowby=as.numeric(rowfactor)
+  colby=as.numeric(colfactor)
   dt=data.table(cbind(rowby,mat))
   dt=dt[,lapply(.SD, function(x){function_to_use(x,na.rm = T)}),by=rowby]
   dt=dt[order(dt$rowby),]
-  rownames(dt)=dt$rowby
+  rname=dt$rowby  
   dt=dt[,rowby:=NULL]
   dt=t(dt)
   dt=data.table(cbind(colby,dt))
   dt=dt[,lapply(.SD, function(x){function_to_use(x,na.rm = T)}),by=colby]
   dt=dt[order(dt$colby),]
-  rownames(dt)=dt$colby
+  cname=dt$colby
   dt=dt[,colby:=NULL]
   dt=as.matrix(t(dt))
+  rownames(dt)=levels(rowfactor)[rname]
+  colnames(dt)=levels(colfactor)[cname]  
   return(dt)
 }
                 
@@ -366,4 +371,92 @@ list.dirs <- function(path=".", pattern=NULL, all.dirs=FALSE,
     return(dirs)
   else
     return(basename(dirs))
+}
+      
+      
+#' @export
+tiling_around_region <- function(input_bed, windowsize, windownum) {
+    #generate bins around region center, for each row in bed generate 2*windownum bin
+    center=round((input_bed[,2]+input_bed[,3])/2)
+    temp=lapply(1:length(center),function(x){  #sapply(simplify=..)
+      starts=seq(center[x]-windownum*windowsize+1,center[x]+(windownum-1)*windowsize+1,windowsize)
+      ends=seq(center[x]-(windownum-1)*windowsize,center[x]+windownum*windowsize,windowsize)
+      out=cbind(rep(as.character(input_bed[x,1]),windownum*2),starts,ends,rep(x,windownum*2))  
+      return(out)
+    })
+    tiling_bed=data.frame(do.call(rbind,temp),stringsAsFactors=F)
+    rm(temp)
+    colnames(tiling_bed)=c("chr","sta","sto","input_id")
+    tiling_bed[,2]=as.numeric(tiling_bed[,2])
+    tiling_bed[,3]=as.numeric(tiling_bed[,3])
+    tiling_bed[,4]=as.numeric(tiling_bed[,4])
+    tiling_bed[,2][tiling_bed[,2]<=0]=0
+    tiling_bed[,3][tiling_bed[,3]<=1]=1
+    tiling_bed$bin_id=1:nrow(tiling_bed)
+    return(tiling_bed)
+}  
+      
+#' @export
+tiling_within_region <- function(input_bed, windownum, extending_windownum, extending_windowsize) {
+    #generate bins within and round regions, for each row in bed generate windownum bin within region, and extending_windownum bin extend out both side
+    sta=input_bed[,2]
+    sto=input_bed[,3]
+    windowsize=(sto-sta)/windownum
+    bin_num_per_row=windownum+extending_windownum*2
+    temp=lapply(1:length(sta),function(x){  #sapply(simplify=..)
+      starts=c(seq(sta[x]-extending_windownum*extending_windowsize+1,sta[x],extending_windowsize),
+               seq(sta[x],sto[x]-windowsize[x],length.out = windownum),
+               seq(sto[x]+1,sto[x]+(extending_windownum-1)*extending_windowsize+1,extending_windowsize))
+      ends=c(seq(sta[x]-(extending_windownum-1)*extending_windowsize,sta[x],extending_windowsize),
+             seq(sta[x]+windowsize[x],sto[x],length.out = windownum),
+             seq(sto[x]+extending_windowsize,sto[x]+extending_windownum*extending_windowsize,extending_windowsize))
+      starts=round(starts)
+      ends=round(ends)
+      out=cbind(rep(as.character(input_bed[x,1]),bin_num_per_row),starts,ends,rep(x,bin_num_per_row))  
+      return(out)
+    })
+    tiling_bed=data.frame(do.call(rbind,temp),stringsAsFactors=F)
+    rm(temp)
+    colnames(tiling_bed)=c("chr","sta","sto","input_id")
+    tiling_bed[,2]=as.numeric(tiling_bed[,2])
+    tiling_bed[,3]=as.numeric(tiling_bed[,3])
+    tiling_bed[,4]=as.numeric(tiling_bed[,4])
+    tiling_bed[,2][tiling_bed[,2]<=0]=0
+    tiling_bed[,3][tiling_bed[,3]<=1]=1
+    tiling_bed$bin_id=1:nrow(tiling_bed)
+    return(tiling_bed)
+}
+
+#' @export
+get_tiling_matrix=function(region_bed, tiling_bed, signal_bedgraph, strand=T){
+    
+    #intersecting
+    intersect_out=bedtools_intersect(bed1 = signal_bedgraph,bed2 = tiling_bed)
+    tmp_tbl=cbind(signal_bedgraph[intersect_out$overlap[,1],4],tiling_bed$bin_id[intersect_out$overlap[,2]])
+    colnames(tmp_tbl)=c("signal_intensity","bin_id")
+    tmp_tbl=data.table(tmp_tbl)
+    tmp_tbl=tmp_tbl[,.(signal_intensity=mean(signal_intensity)),by=bin_id]
+
+    tiling_bed$signal_intensity=0
+    tiling_bed$signal_intensity[tmp_tbl$bin_id]=tmp_tbl$signal_intensity
+
+    tiling_matrix=matrix(tiling_bed$signal_intensity,nrow=nrow(region_bed),byrow = T)
+    
+    if(strand){
+        negative_strand_regions=which(region_bed[,6]=="-")
+        if(length(negative_strand_regions)>0){
+            tiling_matrix[negative_strand_regions,]=tiling_matrix[negative_strand_regions,seq(ncol(tiling_matrix),1)]
+        }
+    }
+    return(tiling_matrix)
+}
+      
+SparseMatrix2Matrix=function(mat,orderByRow=T){
+  #get the data frame version of the sparse matrix object mat 
+  summ=Matrix::summary(mat)
+  matdataframe=matrix(c(summ$i,summ$j,summ$x),nrow(summ),3)
+  if(orderByRow){
+    matdataframe=matdataframe[order(matdataframe[,1]),]
+  }
+  return(matdataframe)
 }

@@ -72,6 +72,9 @@ cellcycle_assigning=function(SeuratOBJ,cycle_gene_list){
     g2m.genes <- cc.genes[44:97]
     
     SeuratOBJ <- CellCycleScoring(object = SeuratOBJ, s.genes = s.genes, g2m.genes = g2m.genes, set.ident = F)
+    SeuratOBJ@meta.data$Phase=as.character(SeuratOBJ@meta.data$Phase)
+    SeuratOBJ@meta.data$Phase[SeuratOBJ@meta.data$Phase=="G2M"]="G2/M"
+    SeuratOBJ@meta.data$Phase[SeuratOBJ@meta.data$Phase=="G1"]="G1/out of cycle"
     return(SeuratOBJ)
 }
 
@@ -215,7 +218,7 @@ combo_identification=function(exp_table, label_list, p_threshold=0.05, log2fold_
 #' input a seurat object or single cell matrix, get randomly selected n cells as super-cell seed. For each seed,
 #' merge k_merge nearest neighbor cells to the seed cell and calculate average expression.
 #'
-#' @param sc_object sc matrix with row in cells, col in genes. Or Seurat object, if so Seurat@scale.data will be used for calculation.
+#' @param sc_object sc matrix with row as cells, col in genes. Or Seurat object, if so, Seurat@scale.data will be used for calculation.
 #' @param k_filter remove cells that have no mutual nearest neighbor with k=k_filter, default not removing any cells.
 #' @param k_merge merge k=k_merge nearest neighbor to create each super-cell.
 #' @param n number of super-cell to pick, will be ignored if tag_cell!=NULL.
@@ -342,7 +345,22 @@ Super_cell_creation=function(sc_object,k_filter=NULL,k_merge=100,n=5000,tag_cell
     if(verbose){message(paste("merging finished: time consumed:",t[1],"hr",t[2],"min",t[3],"s"))}
     return(outmat)
 }
-          
+
+#' @export 
+Associate_with_super_cell=function(supercell_matrix,Seurat_object,target_singlecell=1:nrow(Seurat_object@meta.data)){
+    #assign super-cell to single-cell
+    PC_supercell=Seurat_object@dr$pca@cell.embeddings[as.numeric(rownames(supercell_matrix)),1:25]
+    PC_singlecell=Seurat_object@dr$pca@cell.embeddings[target_singlecell,1:25]
+    
+    nn=RANN::nn2(PC_supercell,PC_singlecell,k=1)$nn.idx
+    
+    Seurat_object@meta.data$supercell=NA
+    Seurat_object@meta.data$supercell[target_singlecell]=nn[,1]
+    
+    return(Seurat_object)
+}
+
+
 #' @export       
 plot_table_rank=function(l,tagcol=NULL,topn=10){
     tb=list()

@@ -38,14 +38,17 @@ plotByGroup=function(Exp_Seurat,
         }
     }
     
+    maxx=max(plotting_coordinates[,1])
+    minx=min(plotting_coordinates[,1])
+    maxy=max(plotting_coordinates[,2])
+    miny=min(plotting_coordinates[,2])  
+    
     Group_assignment=as.character(Group_assignment)
-   
+    
     #remove not used grouptype
     if(is.null(Group_type)){
         Group_type=unique(Group_assignment)
         Group_type=Group_type[gtools::mixedorder(Group_type)]
-    }else{
-        Group_type=Group_type[Group_type %in% Group_assignment]
     }
     
     #color by group id
@@ -107,12 +110,15 @@ plotByGroup=function(Exp_Seurat,
                 cluster_center[i,]=tagcoord[which.min(proxy::dist(tagcoord,t(center))),]            
             }
         }
+        if(length(not_present)>0){
+            cluster_center=cluster_center[-not_present,]
+            Text2add=Group_type[-not_present]
+            #message(paste0(not_present,collapse=","))
+        }else{
+            Text2add=Group_type
+        }
     }
     
-    maxx=max(plotting_coordinates[,1])
-    minx=min(plotting_coordinates[,1])
-    maxy=max(plotting_coordinates[,2])
-    miny=min(plotting_coordinates[,2])  
     if(is.null(plotGroupOnly)){
         if(!is.null(backGroundGroup)){
             background_cell=which(cluster_assign %in% backGroundGroup)
@@ -136,8 +142,8 @@ plotByGroup=function(Exp_Seurat,
             plot(plotting_coordinates[random_order,],pch=19,col=tagcol[match(cluster_assign,Group_type)][random_order],cex=0.5,
                  main=paste(main_title,embedding_type),ylim=c(miny,maxy),xlim=c(minx,maxx+0.3*(maxx-minx)))        
         }
-        if(Addtext){text(cluster_center[,1],cluster_center[,2],label=Group_type,font=2,cex=1.2)}
-        if(Addlegend){legend("topright",Group_type,bty = "n",lty=0,pch=19,col=tagcol)}
+        if(Addtext){text(cluster_center[,1],cluster_center[,2],label=Text2add,font=2,cex=1.2)}
+        if(Addlegend){legend("topright",as.character(Group_type),bty = "n",lty=0,pch=19,col=tagcol)}
     }else{
         if(!plotGroupOnly %in% Group_type){
             stop("cell type to plot is missing in current data")
@@ -148,9 +154,12 @@ plotByGroup=function(Exp_Seurat,
         for(i in 1:length(plotGroupOnly)){
             points(plotting_coordinates[cluster_assign==plotGroupOnly[i],],pch=19,col=tagcol[which(Group_type==plotGroupOnly[i])],cex=0.5)
         }
-        if(Addtext){text(cluster_center[tag_cluster_num,1],cluster_center[tag_cluster_num,2]
-                         ,label=Group_type[tag_cluster_num],font=2,cex=1.2)}      
-        if(Addlegend){legend("topright",Group_type[tag_cluster_num],bty = "n",lty=0,pch=19,col=tagcol[tag_cluster_num])}
+        if(Addtext){
+            tag_cluster_num_foradd=match(plotGroupOnly,Text2add)
+            text(cluster_center[tag_cluster_num_foradd,1],cluster_center[tag_cluster_num_foradd,2]
+                         ,label=as.character(Text2add[tag_cluster_num_foradd]),font=2,cex=1.2)
+        }      
+        if(Addlegend){legend("topright",as.character(Group_type[tag_cluster_num]),bty = "n",lty=0,pch=19,col=tagcol[tag_cluster_num])}
     }
 }
 
@@ -171,7 +180,7 @@ plotByGroup_1by1=function(Exp_Seurat,
         Group_type=unique(Group_assignment)
         Group_type=Group_type[gtools::mixedorder(Group_type)]
     }else{
-        Group_type=Group_type[Group_type %in% Group_assignment]
+        Group_type=Group_type
     }
     
     if(is.null(plotGroupOnly)){
@@ -206,6 +215,7 @@ plotByGroupA_byB=function(Exp_Seurat,
                           tagcol=NULL,
                           Addtext=T,
                           rm_small_group=F,
+                          min_cell_num_per_group=length(Group_assignment_A)/100,
                           tag_cell=NULL  #plot only tag cells
                          ){
     Group_assignment_A=as.character(Group_assignment_A)
@@ -214,8 +224,6 @@ plotByGroupA_byB=function(Exp_Seurat,
     if(is.null(Group_type)){
         Group_type=unique(Group_assignment_A)
         Group_type=Group_type[gtools::mixedorder(Group_type)]
-    }else{
-        Group_type=Group_type[Group_type %in% Group_assignment_A]
     }
     
     if(is.null(plotGroupOnly)){
@@ -227,6 +235,11 @@ plotByGroupA_byB=function(Exp_Seurat,
     for(i in 1:length(plotGroupOnly)){
         New_group_assignment=Group_assignment_A
         New_group_assignment[!Group_assignment_B %in% plotGroupOnly[i]]="bkg"
+        
+        gp_stat=table(New_group_assignment)
+        tag_gp=names(gp_stat)[gp_stat>min_cell_num_per_group]
+        tag_gp=setdiff(tag_gp,"bkg")
+        New_group_assignment[!as.character(New_group_assignment) %in% tag_gp]="bkg"
         
         plotByGroup(Exp_Seurat,
                     Group_assignment=New_group_assignment,
@@ -252,41 +265,53 @@ plotByScore=function(Exp_Seurat,
                      colorSD=1,
                      colorCenter=mean(Score_assignment),
                      target_dot_number=10000,
-                     tag_cell=NULL,
+                     must_plot_cell=NULL,
+                     dont_plot_cell=c(),
                      bkg_cell=NULL, #don't supply bkg if tag is empty
                      cols=NULL,
                      bkg_col="gray",
-                     Addlegend=T) #tag_cell only subsample Exp_Seurat but not Score_assignment
-{   
+                     Addlegend=T,
+                     positive_scores=T) #lower bound can't be lower than 0
+{
+    if(!is.null(must_plot_cell)){colorCenter=mean(Score_assignment[must_plot_cell])}
+    
     Score_assignment=as.numeric(Score_assignment)
     eval(parse(text=paste0("plotting_coordinates=Exp_Seurat@dr$",embedding_type,"@cell.embeddings[,1:2]")))
+
+    maxx=max(plotting_coordinates[,1])
+    minx=min(plotting_coordinates[,1])
+    maxy=max(plotting_coordinates[,2])
+    miny=min(plotting_coordinates[,2]) 
     
-    if(is.null(tag_cell)){
+    if(is.null(must_plot_cell)){
         bkg_cell=NULL
     }
     
     if(is.null(bkg_cell)){
         #reduce dot number to target_dot_number
         tot_dot_num=nrow(plotting_coordinates)
-        if(tot_dot_num>target_dot_number){
-            get1w=Subsample_by_group(Exp_Seurat@ident,target_dot_number)
+        if(tot_dot_num-length(dont_plot_cell)>target_dot_number){
+            tmp=setdiff(1:tot_dot_num,dont_plot_cell)
+            get1w=Subsample_by_group(Exp_Seurat@ident[tmp],target_dot_number)
+            get1w=tmp[get1w]
         }else{
-            get1w=1:tot_dot_num
+            get1w=setdiff(1:tot_dot_num,dont_plot_cell)
         }
     }else{
-        get1w=bkg_cell
+        get1w=setdiff(bkg_cell,dont_plot_cell)
     }
     
-    if(is.null(tag_cell)){
+    if(is.null(must_plot_cell)){
         plotting_coordinates=plotting_coordinates[get1w,]
         Score_assignment=Score_assignment[get1w]
         foreground=1:length(get1w)
         background=1
     }else{
-        allc=union(tag_cell,get1w)
+        allc=union(must_plot_cell,get1w)
         plotting_coordinates=plotting_coordinates[allc,]
-        foreground=which(allc %in% tag_cell)
-        background=which(!allc %in% tag_cell)
+        Score_assignment=Score_assignment[allc]
+        foreground=which(allc %in% must_plot_cell)
+        background=which(!allc %in% must_plot_cell)
     }
     
     if(random_order){
@@ -296,19 +321,19 @@ plotByScore=function(Exp_Seurat,
      
     if(is.null(cols)){
         rbPal <- colorRampPalette(rev(RColorBrewer::brewer.pal(7,"RdBu")))
-        lowerbound=colorCenter-colorSD*sd(Score_assignment)
-        upperbound=colorCenter+colorSD*sd(Score_assignment)
+        lowerbound=colorCenter-colorSD*sd(Score_assignment[foreground])
+        upperbound=colorCenter+colorSD*sd(Score_assignment[foreground])
+        if(positive_scores){
+            lowerbound=max(lowerbound,0)
+        }
         breaks=c(-Inf,seq(lowerbound, upperbound, length.out=25),Inf)
         cols=rbPal(26)[as.numeric(cut(Score_assignment,breaks = breaks, include.lowest=TRUE))]
     }
     
-    maxx=max(plotting_coordinates[,1])
-    minx=min(plotting_coordinates[,1])
-    maxy=max(plotting_coordinates[,2])
-    miny=min(plotting_coordinates[,2]) 
+
     #plot bkg
-    plot(plotting_coordinates[background,],pch=19,cex=0.3,col=bkg_col,xlim=c(minx,maxx+0.3*(maxx-minx)),main=paste(main_title,embedding_type),ylim=c(miny,maxy))      
-    points(plotting_coordinates[foreground,],pch=19,cex=0.5,col=cols[random_order])  
+    plot(plotting_coordinates[background,],pch=19,cex=0.3,col=bkg_col,xlim=c(minx,maxx+0.3*(maxx-minx)),main=paste(main_title,embedding_type),ylim=c(miny,maxy),xlab="TSNE-x",ylab="TSNE-y")      
+    points(plotting_coordinates[foreground,],pch=19,cex=0.5,col=cols[foreground])  
     if(Addlegend){legend("topright",legend=round(seq(lowerbound, upperbound, length.out=5),2),bty = "n",lty=0,pch=19,col=rbPal(5))}
 }
 

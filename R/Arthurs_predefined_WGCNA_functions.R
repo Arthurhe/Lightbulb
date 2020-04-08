@@ -167,6 +167,9 @@ Module_intersection=function(module1,module2,lineage_name_1,lineage_name_2){
         }
     }
     
+    module_cross_tbl_normedbyMod1=t(apply(module_cross_tbl,1,function(x){x/sum(x)}))
+    module_cross_tbl_normedbyMod2=apply(module_cross_tbl,2,function(x){x/sum(x)})
+    
     gene_id_tbl=matrix("",nrow=nrow(module_cross_tbl),ncol=ncol(module_cross_tbl))
     colnames(gene_id_tbl)=colnames(module_cross_tbl)
     rownames(gene_id_tbl)=rownames(module_cross_tbl)
@@ -187,6 +190,8 @@ Module_intersection=function(module1,module2,lineage_name_1,lineage_name_2){
     
     return(list(module_cross_tbl=module_cross_tbl,
                 module_cross_tbl_normed=module_cross_tbl_normed,
+                module_cross_tbl_normedbyMod1=module_cross_tbl_normedbyMod1,
+                module_cross_tbl_normedbyMod2=module_cross_tbl_normedbyMod2,
                 gene_id_tbl=gene_id_tbl,
                 gene_id_list=gene_id_list,
                 gene_group1=gene_group1,
